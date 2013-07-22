@@ -1,29 +1,22 @@
 {
-  "name": "libubret",
-  "version": "0.1.0",
-  "description": "Ubret",
+  "name": "ubret",
+  "version": "0.2.0",
+  "description": "'A Library for Making Data Visualization Tools'",
   "main": "lib/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cake -s watch"
+    "test": "mocha test/"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/zooniverse/Ubret"
+    "url": "git://github.com/zooniverse/Ubret.git"
   },
-  "author": "Zooniverse",
-  "license": "MIT",
-  "readmeFilename": "README.md",
-  "gitHead": "54bc83544cee8d22d4c832c9666793b2e6903451",
-  "dependencies": {
-    "coffee-script": "1.4.0",
-    "uglify-js": "2.2.5"
+  "author": "Ed Paget",
+  "license": "APL",
+  "bugs": {
+    "url": "https://github.com/zooniverse/Ubret/issues"
   },
+  "dependencies": {},
   "devDependencies": {
-    "node-static": "git://github.com/edpaget/node-static#890ea6756d52038d42b6e8290ca8cf755f24054c"
-  },
-  "keywords": [
-    "Ubret",
-    "Zooniverse"
-  ]
+    "node-static": "~0.7.0"
+  }
 }
