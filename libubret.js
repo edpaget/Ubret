@@ -52,12 +52,31 @@
 
     trigger: function(event/*, args */) {
       var args = Array.slice(arguments, 1);
+      if (_.isNull(this._listeners))
+        return;
       _.each(this._listeners[event], function(responder) {
         responder.func.apply(responder.context, args);
       });
     }
   }
 
-  U.StateMachine = {
-  }
+  U.StateMachine = _.extend({
+    initStateMachine: function(states) {
+      this._stateMachine = [];
+      _.each(states, function(func, state) {
+        this.on("fsm:" + state, func, this);
+      }, this);
+    },
+
+    setState: function(state) {
+      this._stateMachine = _.uniq(this._stateMachine.concat([state]));
+      this.trigger("fsm:" + this._stateMachine.join(' '));
+    },
+
+    unsetState: function(state) {
+      this._stateMachine = _.without(this._stateMachine, state);
+      this.trigger("fsm:unset:" + state);
+      this.trigger("fsm:" + this._stateMachine.join(' '));
+    } 
+  }, U.EventEmitter);
 }).call(this)

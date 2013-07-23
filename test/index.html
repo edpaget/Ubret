@@ -6,6 +6,8 @@
   <link rel="stylesheet" href="vendor/mocha.css" type="text/css" media="screen">
   <script src="vendor/mocha.js"></script>
   <script src="vendor/chai.js"></script>
+  <script src="vendor/sinon-chai.js"></script>
+  <script src="vendor/sinon.js"></script>
   <script>
     mocha.setup('bdd');
     window.expect = chai.expect;
@@ -14,18 +16,18 @@
   <script src="vendor/underscore.array.builders.js"></script>
   <script src="vendor/d3.js"></script>
   <script src="data.js"></script>
-  <script src="tool.js"></script>
   <script src="events.js"></script>
   <script src="state.js"></script>
   <script src="promise.js"></script>
   <script src="ajax.js"></script>
+  <script src="tool.js"></script>
   <script src="../libubret.js"></script>
 </head>
 <body>
   <div id="mocha"></div>
   <script>
     mocha.checkLeaks();
-    mocha.globals(['Ubret', '_', 'd3']);
+    mocha.globals(['top', 'Ubret', '_', 'd3']);
     mocha.run();
   </script>
 </body>

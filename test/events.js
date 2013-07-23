@@ -8,42 +8,51 @@
     });
 
     it("off() - should remove all event listeners", function() {
-      this.eventEmitter.on("event!", function() { return 10;});
-      expect(this.eventEmitter._listeners).to.be.ok;
+      var cbSpy = sinon.spy()
+      this.eventEmitter.on("event!", cbSpy);
       this.eventEmitter.off();
-      expect(this.eventEmitter._listeners).to.be.null;
+      this.eventEmitter.trigger('event!');
+      expect(cbSpy).to.not.have.been.called;
     });
 
     it("off(event) - should remove all listeners for event", function() {
-      this.eventEmitter.on("event!", function() { return 10;});
-      this.eventEmitter.on("event2!", function () { return 10;});
+      var spy1 = sinon.spy();
+      var spy2 = sinon.spy();
+      this.eventEmitter.on("event!", spy1);
+      this.eventEmitter.on("event2!", spy2);
       this.eventEmitter.off("event2!");
-      console.log(this.eventEmitter);
-      expect(this.eventEmitter._listeners['event2!']).to.be.null;
+      this.eventEmitter.trigger('event2!');
+      this.eventEmitter.trigger('event!');
+      expect(spy1).to.have.been.called;
+      expect(spy2).to.not.have.been.called;
     });
 
     it("on/trigger, - register an event listener and to respond to a trigger", function() {
-      this.eventEmitter.on("event!", function() { expect(true).to.be.true; });
-      expect(this.eventEmitter._listeners).to.be.an('Object');
-      this.eventEmitter.trigger('event!')
+      var cbSpy = sinon.spy();
+      this.eventEmitter.on("event!", cbSpy);
+      this.eventEmitter.trigger('event!');
+      expect(cbSpy).to.have.been.called;
     });
   });
 
   describe("U.listenTo", function() {
     it("it should create a listener on the object", function() {
+      var cbSpy = sinon.spy()
       this.eventEmitter = _.extend({}, U.EventEmitter);
-      U.listenTo(this.eventEmitter, 'event!', function() {expect(true).to.be.true;});
+      U.listenTo(this.eventEmitter, 'event!', cbSpy);
+      this.eventEmitter.trigger('event!');
+      expect(cbSpy).to.have.been.called;
     });
   });
 
   describe("U.stopListening", function() {
     it("it should remove listeners from the object", function() {
+      var cbSpy = sinon.spy()
       this.eventEmitter = _.extend({}, U.EventEmitter);
-      U.listenTo(this.eventEmitter, 'event!', function() {return 10;});
+      U.listenTo(this.eventEmitter, 'event!', cbSpy);
       U.stopListening(this.eventEmitter, 'event!');
-      expect(this.eventEmitter._listeners['event!']).to.be.null;
+      this.eventEmitter.trigger('event!');
+      expect(cbSpy).to.not.have.been.called;
     });
   });
-
-
 }).call(this);
