@@ -1,26 +1,76 @@
 (function () {
-  describe("U.StateMachine", function() {
+  describe("U.deepClone", function() {
+    it('should clone all parts of an object', function() {
+      var testObj = {
+        'key1': 1, 
+        'key2': [1, 2, 4, 5], 
+        'key3': {'key4': 1, 'key5': 2 }
+      }
+      var cloneObj = U.deepClone(testObj);
+      testObj.key1 = 2;
+      testObj.key2 = [1, 2];
+      testObj.key3.key5 = 5;
+      expect(cloneObj).to.have.property('key1')
+        .that.equals(1);
+      expect(cloneObj).to.have.property('key2')
+        .that.deep.equals([1, 2, 4, 5]);
+      expect(cloneObj).to.have.property('key3')
+        .that.deep.equals({key4: 1, key5: 2});
+    });
+  });
+  describe("U.State", function() {
     beforeEach(function() {
-      this.fsm = _.extend({}, U.StateMachine);
-      this.addSubtractSpy = sinon.spy();
-      this.unsetAddSpy = sinon.spy();
-      this.fsm.initStateMachine({
-        'add subtract' : this.addSubtractSpy,
-        'unset:add' : this.unsetAddSpy
+      this.state = _.extend({}, U.State);
+    });
+
+    describe("setState", function() {
+      it("should update the state object", function() {
+        this.state.setState('state', true);
+        expect(this.state.state.state).to.be.true;
+      })
+
+      it("should trigger a state:'state' event ", function() {
+        var stateSpy = sinon.spy();
+        this.state.on('state:state', stateSpy);
+        this.state.setState('state', true);
+        expect(stateSpy).to.have.been.calledWith(true);
       });
     });
 
-    it('should fire callback when setState is called', function() {
-      this.fsm.setState('add');
-      expect(this.addSubtractSpy).to.not.have.been.called;
-      this.fsm.setState('subtract');
-      expect(this.addSubtractSpy).to.have.been.called;
+    describe("unsetState", function() {
+      it('should set state object property to null', function () {
+        this.state.setState('state', true);
+        this.state.unsetState('state');
+        expect(this.state.state.state).to.be.null;
+      });
+
+      it('should trigger an unset:"state" event', function () {
+        var stateSpy = sinon.spy();
+        this.state.on('unset:state', stateSpy);
+        this.state.setState('state', true);
+        this.state.unsetState('state');
+        expect(stateSpy).to.have.been.called;
+      });
+
+      it('should not trigger an event if state isnt set', function() {
+        var stateSpy = sinon.spy();
+        this.state.on('unset:state', stateSpy);
+        this.state.unsetState('state');
+        expect(stateSpy).to.not.have.been.called;
+      });
     });
 
-    it('should call unset callbacks when unsetState is called', function() {
-      this.fsm._stateMachine = ['add', 'subtract'];
-      this.fsm.unsetState('add');
-      expect(this.unsetAddSpy).to.have.been.called;
+    describe("whenState", function() {
+      it('should call a function when all the required state is set', function() {
+        var stateSpy = sinon.spy();
+        this.state.whenState(['state1', 'state2'], stateSpy);
+        this.state.setState('state1', true);
+        expect(stateSpy).to.not.have.been.called;
+        this.state.setState('state2', true);
+        expect(stateSpy).to.have.been.called;
+      });
     });
   });
+
+
 }).call(this);
