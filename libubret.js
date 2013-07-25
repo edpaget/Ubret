@@ -182,6 +182,11 @@
     return data;
   }
 
+  U.Data.prototype.keys = function() {
+    return _.chain(this._data).map(function(i) { return _.keys(i) })
+      .flatten().uniq().value();
+  }
+
   U.Data.prototype.toArray = function() {
     // Apply Filters First
     var filtered = _.reduce(this._filters, function(target, filter) {
@@ -253,6 +258,12 @@
     data.query(query).toArray();
   };
 
+  /* Tool accepts an opts object to configure new tools
+   * id: the id of the tool's element (optional)
+   * data: data in the form of an array of objects (optional)
+   * selection: array of selected uids of objects (optional)
+   * state: an object of the initial state of the object (optional) */
+
   U.Tool = function(opts) {
     // Create tool element
     this.id = opts.id || _.uniqueId('tool_');
@@ -282,32 +293,35 @@
     _.defaults(state, {filters: [], fields: []}),
 
     this.setInitialState(state);
-    this.setData(opts.data || []);
-    this.setSelection(opts.selection || []);
 
     if (exists(this.initialize))
       this.initialize();
+
+    this.setData(opts.data || []);
+    this.setSelection(opts.selection || []);
   };
 
   _.extend(U.Tool.prototype, U.State);
 
-  U.Tool.extend = function(obj) {
+  U.extend = function(parent, obj) {
     var child;
 
     if (_.has(obj, 'constructor'))
       child = obj.constructor;
     else
-      child = function() {U.Tool.apply(this, arguments);};
+      child = function() {parent.apply(this, arguments);};
 
     var Surrogate = function(){ this.constructor = child; };
-    Surrogate.prototype = U.Tool.prototype;
+    Surrogate.prototype = parent.prototype;
     child.prototype = new Surrogate;
     
     _.extend(child.prototype, obj);
 
-    child.__super__ = U.Tool.prototype;
+    child.__super__ = parent.prototype;
     return child;
   };
+
+  U.Tool.extend = _.partial(U.extend, U.Tool);
 
   /* State Responders are defined as an Array of Responder Objects,
    * which have the following property defined

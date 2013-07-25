@@ -17,6 +17,12 @@
       });
     });
 
+    describe("keys", function() {
+      it('should return all unique keys inside data', function () {
+        expect(this.data.keys()).to.deep.equal(['a', 'b', 'c']);
+      });
+    });
+
     describe("filter", function() {
       it('should return a new data object', function() {
         expect(this.data.filter(function(d) { return d.a === 2;}))
