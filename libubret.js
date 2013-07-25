@@ -243,4 +243,68 @@
   U.query = function(data, query) {
     data.query(query).toArray();
   }
+
+  /* Promise that compiles to the Promises/A+ spec */
+
+  U.Promise = function() {
+    this._fullfil = [];
+    this._reject = [];
+    this.state = 'pending';
+    this.value = null;
+    this.reason = 
+
+    this._onFullfil = function() {
+      if (!(this.state === 'fulfilled') || (_.isEmpty(this._fullfil)))
+        return;
+      thenable = this._fulfill.shift();
+      try {
+        if func
+        value = thenable.func(this.value);
+        thenable.child.resolve(value);
+      } catch (e) {
+        thenable.child.reject(e);
+      }
+      this._onFullfil();
+    }
+
+    this._onReject = function () {
+      if (!(this.state === 'rejected') || (_.isEmpty(this._reject)))
+        return;
+      thenable = this._reject.shift();
+      try {
+        value = thenable.func(this.reason);
+        thenable.child.resolve(value);
+      } catch (e) {
+        thenable.child.reject(e);
+      }
+      this._onReject();
+    };
+  };
+
+  U.Promise.prototype.then = function(resolve, reject) {
+    child = new Promise();
+    if (_.isFunction(resolve))
+      this._fullfil.push({child: child, fn: resolve});
+    if (_.isFunction(error))
+      this._reject.push({child: child, fn: reject});
+    if (!(this.state = 'pending')) {
+      if (this.state = 'fulfilled') 
+        _.defer(this._onFulfill());
+      else
+        _.defer(this._onReject());
+    }
+    return child;
+  }
+
+  U.Promise.prototype.fulfill = function(value) {
+    if (!_.isNull(this.value))
+      throw new Error("Promise is already resolved");
+    this.state = 'fulfilled';
+    this.value = value;
+    this._onFulfill();
+  }
+
+  U.Promise.prototype.reject = function(value) {
+  }
+
 }).call(this)
