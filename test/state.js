@@ -21,12 +21,13 @@
   describe("U.State", function() {
     beforeEach(function() {
       this.state = _.extend({}, U.State);
+      this.state.setInitialState({});
     });
 
     describe("setState", function() {
       it("should update the state object", function() {
         this.state.setState('state', true);
-        expect(this.state.state.state).to.be.true;
+        expect(this.state._state.state).to.be.true;
       })
 
       it("should trigger a state:'state' event ", function() {
@@ -41,7 +42,7 @@
       it('should set state object property to null', function () {
         this.state.setState('state', true);
         this.state.unsetState('state');
-        expect(this.state.state.state).to.be.null;
+        expect(this.state._state.state).to.be.null;
       });
 
       it('should trigger an unset:"state" event', function () {

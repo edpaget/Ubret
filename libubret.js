@@ -6,6 +6,8 @@
 
   var root = this;
   var previousUbret = root.U;
+  var $ = this.$;
+  var d3 = this.d3;
 
   var U = {};
 
@@ -42,9 +44,9 @@
   }
 
   U.EventEmitter = {
-    _listeners: {},
-
     on: function(event, cb, context) {
+      if (!exists(this._listeners))
+        this._listeners = {};
       var responder = {func: cb, context: context};
       if (_.isUndefined(this._listeners[event]))
         this._listeners[event] = [responder]
@@ -53,6 +55,8 @@
       },
 
     off: function(/* args */) {
+      if (!exists(this._listeners))
+        return;
       var event = arguments[0],
         func = arguments[1],
         context = arguments[2];
@@ -65,6 +69,8 @@
     },
 
     trigger: function(event/*, args */) {
+      if (!exists(this._listeners))
+        return;
       var args = Array.slice(arguments, 1);
       if (_.isNull(this._listeners))
         return;
@@ -75,19 +81,19 @@
   }
 
   U.State = _.extend({
-    state: {},
-
     setInitialState: function (stateObj) {
-      this.state = U.deepClone(stateObj);
+      this._state = U.deepClone(stateObj);
     },
 
     whenState: function(states, cb) {
       var stateCheck = function() {
         var check = _.every(states, function(state) {
-          return exists(this.state[state]);
+          return exists(this._state[state]);
         }, this);
-        if (check)
-          cb.call(this);
+        if (check) {
+          cb.apply(this, _.values(
+            _.pick.apply(null, [this._state].concat(states))));
+        }
       };
 
       _.each(states, function(state) {
@@ -95,16 +101,22 @@
       }, this);
     },
 
+    getState: function(state) {
+      if (!exists(state))
+        return U.deepClone(this._state);
+      return this._state[state];
+    },
+
     setState: function(state, value) {
       if (!exists(value))
         throw new Error("State Cannot be undefined or null");
-      this.state[state] = U.deepClone(value);
-      this.trigger("state:" + state, this.state[state]);
+      this._state[state] = U.deepClone(value);
+      this.trigger("state:" + state, this._state[state]);
     },
 
     unsetState: function(state) {
-      if (exists(this.state[state])) {
-        this.state[state] = null;
+      if (exists(this._state[state])) {
+        this._state[state] = null;
         this.trigger("unset:" + state);
       }
     }
@@ -173,11 +185,8 @@
   U.Data.prototype.toArray = function() {
     // Apply Filters First
     var filtered = _.reduce(this._filters, function(target, filter) {
-        console.log(target, filter.toString());
         return _.filter(target, filter, this);
       }, this._data, this);
-
-    console.log(filtered);
 
     // Apply added fields
     var withFields = _.reduce(this._fields, function(target, field) {
@@ -221,7 +230,7 @@
     if (exists(query.select)) 
       data = data.project.apply(data, query.select);
     else
-      data = data.project.apply(data, '*');
+      data = data.project.call(data, '*');
 
     if (exists(query.where))
       data._filters = data._filters.concat(query.where);
@@ -242,69 +251,147 @@
 
   U.query = function(data, query) {
     data.query(query).toArray();
-  }
-
-  /* Promise that compiles to the Promises/A+ spec */
-
-  U.Promise = function() {
-    this._fullfil = [];
-    this._reject = [];
-    this.state = 'pending';
-    this.value = null;
-    this.reason = 
-
-    this._onFullfil = function() {
-      if (!(this.state === 'fulfilled') || (_.isEmpty(this._fullfil)))
-        return;
-      thenable = this._fulfill.shift();
-      try {
-        if func
-        value = thenable.func(this.value);
-        thenable.child.resolve(value);
-      } catch (e) {
-        thenable.child.reject(e);
-      }
-      this._onFullfil();
-    }
-
-    this._onReject = function () {
-      if (!(this.state === 'rejected') || (_.isEmpty(this._reject)))
-        return;
-      thenable = this._reject.shift();
-      try {
-        value = thenable.func(this.reason);
-        thenable.child.resolve(value);
-      } catch (e) {
-        thenable.child.reject(e);
-      }
-      this._onReject();
-    };
   };
 
-  U.Promise.prototype.then = function(resolve, reject) {
-    child = new Promise();
-    if (_.isFunction(resolve))
-      this._fullfil.push({child: child, fn: resolve});
-    if (_.isFunction(error))
-      this._reject.push({child: child, fn: reject});
-    if (!(this.state = 'pending')) {
-      if (this.state = 'fulfilled') 
-        _.defer(this._onFulfill());
-      else
-        _.defer(this._onReject());
-    }
+  U.Tool = function(opts) {
+    // Create tool element
+    this.id = opts.id || _.uniqueId('tool_');
+    this.el = document.createElement('div');
+    this.el.id = this.id;
+    this.el.className = this.name || '';
+
+    if (exists($)) 
+      this.$el = $(this.el);
+    if (exists(d3))
+      this.d3el = d3.select(this.el)
+    if ((exists(this.d3el) || exists(this.$el)) && exists(this.domResponders))
+      this.initializeDomResponders();
+
+    // Initialize State Responders
+    this.whenState(['data', 'filters', 'fields'], this.prepareData);
+    this.whenState(['prepared-data'], this.updateChildData);
+
+    if (exists(this.stateResponders)) 
+      this.initializeStateResponders();
+
+    // Setup State
+    var state = opts.state || {}
+
+    if (exists(this.defaults))
+      _.defaults(state, this.defaults);
+    _.defaults(state, {filters: [], fields: []}),
+
+    this.setInitialState(state);
+    this.setData(opts.data || []);
+    this.setSelection(opts.selection || []);
+
+    if (exists(this.initialize))
+      this.initialize();
+  };
+
+  _.extend(U.Tool.prototype, U.State);
+
+  U.Tool.extend = function(obj) {
+    var child;
+
+    if (_.has(obj, 'constructor'))
+      child = obj.constructor;
+    else
+      child = function() {U.Tool.apply(this, arguments);};
+
+    var Surrogate = function(){ this.constructor = child; };
+    Surrogate.prototype = U.Tool.prototype;
+    child.prototype = new Surrogate;
+    
+    _.extend(child.prototype, obj);
+
+    child.__super__ = U.Tool.prototype;
     return child;
-  }
+  };
 
-  U.Promise.prototype.fulfill = function(value) {
-    if (!_.isNull(this.value))
-      throw new Error("Promise is already resolved");
-    this.state = 'fulfilled';
-    this.value = value;
-    this._onFulfill();
-  }
+  /* State Responders are defined as an Array of Responder Objects,
+   * which have the following property defined
+   *    whenState: String of states 
+   *    respond: A single function or function reference, or an Array 
+   *      of functions or function references, or a String of 
+   *      names of object methods. */
 
-  U.Promise.prototype.reject = function(value) {
-  }
+  U.Tool.prototype.initializeStateResponders = function() {
+    _.each(this.stateResponders, this._initStateResponder, this);
+  };
+
+  U.Tool.prototype._initStateResponder = function(responder) {
+    var respond = responder.responder;
+    var state = _.partial(this.whenState, responder.whenState.split(' '));
+
+    if (_.isFunction(respond))
+      return state(respond);
+    else if (_.isString(respond))
+      respond = _.map(respond.split(' '), function(method) {
+        if (!_.isFunction(this[method]))
+          throw new Error(method + " is not defined");
+        return this[method];}, this);
+    _.each(respond, state, this);
+  };
+
+  /* this.domResponders is defined as an object where keys are a DOM event 
+   * defined as "event-type sizzle-selector", and values are either functions
+   * or a string of an object method name; */
+
+  U.Tool.prototype.initializeDomResponders = function() {
+    _.each(this.domResponders, function(fn, selector) {
+      if (_.isString(fn)) {
+        if (exists(this[fn]))
+          fn = this[fn];
+        else
+          throw new Error(fn + " is not defined.");
+      }
+
+      selector = selector.split(' ');
+      var event = selector[0];
+      selector = _.rest(selector).join(' ');
+
+      if (exists(this.d3el))
+        d3el.select(selector).on(event, fn);
+      else 
+        $el.on(event, selector, fn);
+    }, this);
+  };
+
+  U.Tool.prototype.prepareData = function(data, filters, fields) {
+    this.setState('prepared-data', 
+                  data.query({where: filters, withFields: fields}));
+  };
+
+  U.Tool.prototype.parentTool = function(tool) {
+    if (exists(this._parent))
+      this.removeParent();
+    this._parent = tool;
+   
+    this.setInitialState(_.extend(this.getState(), {
+      data: this._parent.childData(),
+      selection: this._parent.getState('selection')
+    }));
+
+    U.listenTo(this._parent, 'data', this.setData, this);
+    U.listenTo(this._parent, 'selection', this.setSelection, this);
+  };
+
+  U.Tool.prototype.childData = function() {
+    return this.getState('prepared-data').toArray() || [];
+  };
+
+  U.Tool.prototype.setData = function(data) {
+    this.setState('data', new U.Data(U.deepClone(data)));
+  };
+
+  U.Tool.prototype.setSelection = function(selection) {
+    this.setState('selection', U.deepClone(selection));
+    this.trigger('selection', this.getState('selection'));
+  };
+
+  U.Tool.prototype.updateChildData = function() {
+    this.trigger('data', this.childData());
+  };
 
 }).call(this)
