@@ -34,5 +34,15 @@
     perPage: function() {}
   });
 
+  U.next = function(ptool) {
+    page = ptool.getState('currentPage');
+    ptool.setState('currentPage', page + 1);
+  }
+
+  U.prev = function(ptool) {
+    page = ptool.getState('currentPage');
+    ptool.setState('currentPage', (page - 1 < 0) ? page - 1 : 0);
+  }
+
   U.PaginatedTool.extend = _.partial(U.extend, U.PaginatedTool);
 }).call(this);

@@ -13,6 +13,7 @@
       this.header = this.table.append('thead');
       this.body = this.table.append('tbody');
     },
+
     domEvents: {
       'click tr' : 'selectRow',
       'click th' : 'sortColumn'
@@ -45,6 +46,11 @@
       var keys = data.keys();
       var pages = data.toArray();
 
+      if (page >= pages.length)
+        page = page % pages.length;
+      else if (page < 0)
+        page = 0;
+
       this.drawHeader(keys);
       this.drawBody(pages[page], selection);
       this.drawPageNo(page, pages.length);
@@ -61,7 +67,8 @@
         .append('th')
         .text(_.bind(function(d) { 
           if (this.getState('sortProp') === d)
-            (this.getState('sortOrder') === 'a') ? d = (d + ' ▲') : d = (d +' ▼' );
+            (this.getState('sortOrder') === 'a') ? 
+              d = (d + ' ▲') : d = (d +' ▼' );
           return d; }, this));
     },
 
@@ -90,7 +97,9 @@
         .text("Page: " + (page + 1) + " of " + total)
     },
 
-    perPage: 5
+    perPage: function() {
+      return Math.floor((this.getState('height') - 90) / 27);
+    }
 
   });
 }).call(this);
