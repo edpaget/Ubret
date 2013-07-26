@@ -13,14 +13,44 @@
       this.header = this.table.append('thead');
       this.body = this.table.append('tbody');
     },
+    domEvents: {
+      'click tr' : 'selectRow',
+      'click th' : 'sortColumn'
+    },
 
-    drawPage: function(data, page) {
+    selectRow: function(d) {
+      if (d3.event.ctrlKey) {
+        var selection = this.getState('selection')
+        if (_.contains(selection, d.uid))
+          this.setSelection(_.without(selection, d.uid));
+        else
+          this.setSelection(selection.concat([d.uid]));
+      } else {
+        this.setSelection([d.uid]);
+      }
+    },
+
+    sortColumn: function(d) {
+      if (this.getState('sortProp') == d) {
+        if (this.getState('sortOrder') == 'a')
+          this.setState('sortOrder', 'd');
+        else
+          this.setState('sortOrder', 'a');
+      } else  {
+        this.setState('sortProp', d);
+      }
+    },
+
+    drawPage: function(data, page, selection) {
       var keys = data.keys();
       var pages = data.toArray();
 
       this.drawHeader(keys);
-      this.drawBody(pages[page]);
+      this.drawBody(pages[page], selection);
       this.drawPageNo(page, pages.length);
+
+      if (!U.exists(this.$el))
+        this.delegateDomEvents('d3');
     },
 
     drawHeader: function(keys) {
@@ -29,22 +59,23 @@
       this.header.selectAll('th')
         .data(keys).enter()
         .append('th')
-        .text(function(d) { return d; });
+        .text(_.bind(function(d) { 
+          if (this.getState('sortProp') === d)
+            (this.getState('sortOrder') === 'a') ? d = (d + ' ▲') : d = (d +' ▼' );
+          return d; }, this));
     },
 
-    drawBody: function(data) {
-      console.log(data);
+    drawBody: function(data, selection) {
       this.body.selectAll('tr').remove();
 
       tr = this.body.selectAll('tr')
         .data(data).enter()
         .append('tr')
-        .attr('data-id', function (d) { return d.uid; })
-        .attr('class', _.bind(function (d) {
-          if (_.contains(this.getState('selection'), d.uid))
+        .attr('class', function (d) {
+          if (_.contains(selection, d.uid))
             return 'selected';
           else
-            return '';}, this));
+            return '';});
 
       tr.selectAll('td')
         .data(function(d) { return _.chain(d).omit('uid').values().value(); })

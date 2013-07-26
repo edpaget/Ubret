@@ -3,6 +3,7 @@
 // libubret is distributed under the APL. See COPYING
 
 (function () {
+  "use strict"; 
 
   var root = this;
   var previousUbret = root.U;
@@ -16,12 +17,12 @@
   else
     root.U = U;
 
-  var isA = function(object, interface) {
-    return _.difference(_.keys(object), _.keys(interface)).length === 0;
+  U.isA = function(object, _interface) {
+    return _.difference(_.keys(object), _.keys(_interface)).length === 0;
   };
 
   U.deepClone = function(obj) {
-    if (_.isFunction(obj) || !exists(obj) || !_.isObject(obj))
+    if (_.isFunction(obj) || !U.exists(obj) || !_.isObject(obj))
       return obj;
     var tmp = new obj.constructor();
     _.each(obj, function(value, key) {
@@ -30,7 +31,7 @@
     return tmp;
   }
 
-  var exists = function(obj) {
+  U.exists = function(obj) {
     return !(_.isNull(obj) || _.isUndefined(obj));
   }
 
@@ -45,7 +46,7 @@
 
   U.EventEmitter = {
     on: function(event, cb, context) {
-      if (!exists(this._listeners))
+      if (!U.exists(this._listeners))
         this._listeners = {};
       var responder = {func: cb, context: context};
       if (_.isUndefined(this._listeners[event]))
@@ -55,7 +56,7 @@
       },
 
     off: function(/* args */) {
-      if (!exists(this._listeners))
+      if (!U.exists(this._listeners))
         return;
       var event = arguments[0],
         func = arguments[1],
@@ -69,7 +70,7 @@
     },
 
     trigger: function(event/*, args */) {
-      if (!exists(this._listeners))
+      if (!U.exists(this._listeners))
         return;
       var args = Array.prototype.slice.call(arguments, 1);
       if (_.isNull(this._listeners))
@@ -88,7 +89,7 @@
     whenState: function(states, cb) {
       var stateCheck = function() {
         var check = _.every(states, function(state) {
-          return exists(this._state[state]);
+          return U.exists(this._state[state]);
         }, this);
         if (check) {
           cb.apply(this, _.values(
@@ -102,20 +103,20 @@
     },
 
     getState: function(state) {
-      if (!exists(state))
+      if (!U.exists(state))
         return U.deepClone(this._state);
       return this._state[state];
     },
 
     setState: function(state, value) {
-      if (!exists(value))
+      if (!U.exists(value))
         throw new Error("State Cannot be undefined or null");
       this._state[state] = U.deepClone(value);
       this.trigger("state:" + state, this._state[state]);
     },
 
     unsetState: function(state) {
-      if (exists(this._state[state])) {
+      if (U.exists(this._state[state])) {
         this._state[state] = null;
         this.trigger("unset:" + state);
       }
@@ -135,20 +136,20 @@
   }
 
   U.Data.prototype.filter = function(fn) {
-    data = U.deepClone(this);
+    var data = U.deepClone(this);
     data._filters.push(fn);
     return data;
   }
 
   U.Data.prototype.removeFilter = function(fn) {
-    data = U.deepClone(this)
+    var data = U.deepClone(this)
     data._filters = _.without(this._filters, fn);
     return data;
   };
 
   U.Data.prototype.addField = function(field) {
-    if (isA(field, U.Field)) {
-      data = U.deepClone(this);
+    if (U.isA(field, U.Field)) {
+      var data = U.deepClone(this);
       data._fields.push(field);
       return data;
     } else
@@ -156,19 +157,19 @@
   };
 
   U.Data.prototype.removeField = function(field) {
-    data = U.deepClone(data);
+    var data = U.deepClone(this);
     data._fields = _.without(this._fields, field);
     return data;
   };
 
   U.Data.prototype.project = function(/* args */) {
-    data = U.deepClone(this);
+    var data = U.deepClone(this);
     data._projection = Array.prototype.slice.call(arguments, 0);
     return data;
   };
 
   U.Data.prototype.sort = function(sortProp, order) {
-    data = U.deepClone(this);
+    var data = U.deepClone(this);
     if (!( order === 'a' || order === 'd'))
       throw new Error('Order must be "a" (ascending) or "d" (descending)');
     data._sortProp = sortProp;
@@ -177,7 +178,7 @@
   };
 
   U.Data.prototype.paginate = function(perPage) {
-    data = U.deepClone(this);
+    var data = U.deepClone(this);
     data._perPage = perPage;
     return data;
   }
@@ -202,7 +203,8 @@
       }, filtered, this); 
 
     // Sort Data
-    var sorted = _.sortBy(withFields, function(d) { d[this._sortProp] }, this);
+    var sorted = _.sortBy(withFields, function(d) { 
+      return d[this._sortProp] }, this);
     if (this._sortOrder === 'd')
       sorted = sorted.reverse();
 
@@ -232,24 +234,24 @@
    * perPage: Number of items per page */
 
   U.Data.prototype.query = function(query) {
-    data = U.deepClone(this);
-    if (exists(query.select)) 
+    var data = U.deepClone(this);
+    if (U.exists(query.select)) 
       data = data.project.apply(data, query.select);
     else
       data = data.project.call(data, '*');
 
-    if (exists(query.where))
+    if (U.exists(query.where))
       data._filters = data._filters.concat(query.where);
 
-    if (exists(query.withFields) && 
+    if (U.exists(query.withFields) && 
         _.every(query.withFields, function(field) { 
-          return isA(field, U.Field); }))
+          return U.isA(field, U.Field); }))
       data._fields = data._fields.concat(query.withFields);
 
-    if (exists(query.sort))
+    if (U.exists(query.sort))
       data = data.sort(query.sort.prop, query.sort.order);
     
-    if (exists(query.perPage))
+    if (U.exists(query.perPage))
       data = data.paginate(query.perPage);
 
     return data;
@@ -272,30 +274,30 @@
     this.el.id = this.id;
     this.el.className = this.name || '';
 
-    if (exists($)) 
+    if (U.exists($)) 
       this.$el = $(this.el);
-    if (exists(d3))
+    if (U.exists(d3))
       this.d3el = d3.select(this.el)
-    if ((exists(this.d3el) || exists(this.$el)) && exists(this.domResponders))
-      this.initializeDomResponders();
+    if (U.exists(this.$el) && U.exists(this.domEvents))
+      this.delegateDomEvents('$');
 
     // Initialize State Responders
     this.whenState(['data', 'filters', 'fields'], this.prepareData);
     this.whenState(['prepared-data'], this.updateChildData);
 
-    if (exists(this.stateResponders)) 
+    if (U.exists(this.stateResponders)) 
       this.initializeStateResponders();
 
     // Setup State
     var state = opts.state || {}
 
-    if (exists(this.defaults))
+    if (U.exists(this.defaults))
       _.defaults(state, this.defaults);
     _.defaults(state, {filters: [], fields: []}),
 
     this.setInitialState(state);
 
-    if (exists(this.initialize))
+    if (U.exists(this.initialize))
       this.initialize();
 
     this.setData(opts.data || []);
@@ -349,15 +351,15 @@
     _.each(respond, state, this);
   };
 
-  /* this.domResponders is defined as an object where keys are a DOM event 
+  /* this.domEvents is defined as an object where keys are a DOM event 
    * defined as "event-type sizzle-selector", and values are either functions
    * or a string of an object method name; */
 
-  U.Tool.prototype.initializeDomResponders = function() {
-    _.each(this.domResponders, function(fn, selector) {
+  U.Tool.prototype.delegateDomEvents = function(type) {
+    _.each(this.domEvents, function(fn, selector) {
       if (_.isString(fn)) {
-        if (exists(this[fn]))
-          fn = this[fn];
+        if (U.exists(this[fn]))
+          fn = _.bind(this[fn], this);
         else
           throw new Error(fn + " is not defined.");
       }
@@ -366,10 +368,10 @@
       var event = selector[0];
       selector = _.rest(selector).join(' ');
 
-      if (exists(this.d3el))
-        d3el.select(selector).on(event, fn);
-      else 
-        $el.on(event, selector, fn);
+      if (type === "d3") 
+        this.d3el.selectAll(selector).on(event, fn);
+      else if (type === "$")
+        this.$el.on(event, selector, fn);
     }, this);
   };
 
@@ -379,7 +381,7 @@
   };
 
   U.Tool.prototype.parentTool = function(tool) {
-    if (exists(this._parent))
+    if (U.exists(this._parent))
       this.removeParent();
     this._parent = tool;
    
@@ -397,7 +399,7 @@
   };
 
   U.Tool.prototype.setData = function(data) {
-    this.setState('data', new U.Data(U.deepClone(data)));
+    this.setState('data', new U.Data(data));
   };
 
   U.Tool.prototype.setSelection = function(selection) {

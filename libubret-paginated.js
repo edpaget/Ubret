@@ -7,19 +7,26 @@
   var U = root.U;
 
   U.PaginatedTool = U.Tool.extend({
-    initialize: function() {
-      this.whenState(['prepared-data', 'currentPage'], this.pageData);
+
+    defaults: {
+      sortProp: 'uid',
+      sortOrder: 'a',
+      currentPage: 0
     },
 
-    pageData: function(data, page) {
+    initialize: function() {
+      this.whenState(['prepared-data', 'currentPage', 'selection', 'sortProp', 'sortOrder'], this.pageData);
+    },
+
+    pageData: function(data, page, selection, sortProp, sortOrder) {
       this.drawPage(data.query({
         select: _.result(this, 'defaultProjection'),
         perPage: _.result(this, 'perPage'),
         sort: {
-          prop: this.getState('sortProp') || 'uid', 
-          order: this.getState('sortOrder') || 'd'
+          prop: sortProp,
+          order: sortOrder
         }
-      }), page);
+      }), page, selection);
     },
 
     defaultProjection: ['*'],
