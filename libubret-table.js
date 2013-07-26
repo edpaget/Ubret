@@ -6,21 +6,21 @@
   var root = this;
   var U = root.U;
 
-  U.Table = U.PaginatedTool({
+  U.Table = U.PaginatedTool.extend({
     initialize: function() {
-      this.__super__.initialize.call(this);
+      U.Table.__super__.initialize.call(this);
       this.table = this.d3el.append('table');
       this.header = this.table.append('thead');
-      this.body = this.table.append('body');
+      this.body = this.table.append('tbody');
     },
 
     drawPage: function(data, page) {
       var keys = data.keys();
-      var pageData = data.toArray()[page];
+      var pages = data.toArray();
 
       this.drawHeader(keys);
-      this.drawBody(pageData);
-      this.drawPageNo(page);
+      this.drawBody(pages[page]);
+      this.drawPageNo(page, pages.length);
     },
 
     drawHeader: function(keys) {
@@ -32,12 +32,34 @@
         .text(function(d) { return d; });
     },
 
-    drawBody: function(keys, data) {
+    drawBody: function(data) {
+      console.log(data);
       this.body.selectAll('tr').remove();
 
-      this.header.selectAll('tr')
-        .data(
+      tr = this.body.selectAll('tr')
+        .data(data).enter()
+        .append('tr')
+        .attr('data-id', function (d) { return d.uid; })
+        .attr('class', _.bind(function (d) {
+          if (_.contains(this.getState('selection'), d.uid))
+            return 'selected';
+          else
+            return '';}, this));
+
+      tr.selectAll('td')
+        .data(function(d) { return _.chain(d).omit('uid').values().value(); })
+        .enter().append('td')
+        .text(function(d) { return d; });
     },
+
+    drawPageNo: function(page, total) {
+      this.d3el.selectAll('p').remove()
+      this.d3el.append('p')
+        .attr('class', 'pages')
+        .text("Page: " + (page + 1) + " of " + total)
+    },
+
+    perPage: 5
 
   });
 }).call(this);

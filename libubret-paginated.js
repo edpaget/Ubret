@@ -13,18 +13,18 @@
 
     pageData: function(data, page) {
       this.drawPage(data.query({
-        select: _.result(this, 'defaultProjection')
+        select: _.result(this, 'defaultProjection'),
         perPage: _.result(this, 'perPage'),
         sort: {
           prop: this.getState('sortProp') || 'uid', 
           order: this.getState('sortOrder') || 'd'
         }
       }), page);
-    }
+    },
 
     defaultProjection: ['*'],
 
-    perPage: function() {};
+    perPage: function() {}
   });
 
   U.PaginatedTool.extend = _.partial(U.extend, U.PaginatedTool);

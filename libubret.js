@@ -39,7 +39,7 @@
   };
 
   U.stopListening = function(eventEmitter/*, args */) {
-    var args = Array.slice(arguments, 1);
+    var args = Array.prototype.slice.call(arguments, 1);
     eventEmitter.off.apply(eventEmitter, args);
   }
 
@@ -71,7 +71,7 @@
     trigger: function(event/*, args */) {
       if (!exists(this._listeners))
         return;
-      var args = Array.slice(arguments, 1);
+      var args = Array.prototype.slice.call(arguments, 1);
       if (_.isNull(this._listeners))
         return;
       _.each(this._listeners[event], function(responder) {
@@ -163,7 +163,7 @@
 
   U.Data.prototype.project = function(/* args */) {
     data = U.deepClone(this);
-    data._projection = Array.slice(arguments, 0);
+    data._projection = Array.prototype.slice.call(arguments, 0);
     return data;
   };
 
@@ -183,8 +183,9 @@
   }
 
   U.Data.prototype.keys = function() {
-    return _.chain(this._data).map(function(i) { return _.keys(i) })
-      .flatten().uniq().value();
+    return _.chain(this._data).map(function(i) { 
+          return _.chain(i).omit('uid').keys().value() 
+      }).flatten().uniq().value();
   }
 
   U.Data.prototype.toArray = function() {
@@ -249,13 +250,13 @@
       data = data.sort(query.sort.prop, query.sort.order);
     
     if (exists(query.perPage))
-      data = data.perPage(query.perPage);
+      data = data.paginate(query.perPage);
 
     return data;
   };
 
   U.query = function(data, query) {
-    data.query(query).toArray();
+    return data.query(query).toArray();
   };
 
   /* Tool accepts an opts object to configure new tools
