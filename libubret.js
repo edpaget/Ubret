@@ -35,6 +35,12 @@
     return !(_.isNull(obj) || _.isUndefined(obj));
   }
 
+  U.dispatch = function(dispatchFn, obj) {
+    function(value) {
+      obj[dispatchFn.call(this, value)](value);
+    }
+  }
+
   U.listenTo = function(eventEmitter, event, fn, context) {
     eventEmitter.on(event, fn, context);
   };
@@ -86,18 +92,21 @@
       this._state = U.deepClone(stateObj);
     },
 
-    whenState: function(states, cb) {
+    whenState: function(states, cb, optionalState) {
+      if (!U.exists(optionalState))
+        optionalState = [];
       var stateCheck = function() {
         var check = _.every(states, function(state) {
           return U.exists(this._state[state]);
         }, this);
         if (check) {
           cb.apply(this, _.values(
-            _.pick.apply(null, [this._state].concat(states))));
+            _.pick.apply(null, [this._state]
+                         .concat(states).concat(optionalState))));
         }
       };
 
-      _.each(states, function(state) {
+      _.each(states.concat(optionalState), function(state) {
         this.on("state:" + state, stateCheck, this);
       }, this);
     },

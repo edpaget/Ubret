@@ -70,6 +70,24 @@
         this.state.setState('state2', true);
         expect(stateSpy).to.have.been.called;
       });
+
+      it('should pass optional state to the callback function', function() {
+        var stateSpy = sinon.spy();
+        this.state.whenState(['state1'], stateSpy, ['state2']);
+        this.state.setState('state2', true);
+        this.state.setState('state1', true);
+        expect(stateSpy).to.have.been.calledWith(true, true);
+      });
+
+      it('should call the callback when optional state is set', function() {
+        var stateSpy = sinon.spy();
+        this.state.whenState(['state1'], stateSpy, ['state2']);
+        this.state.setState('state1', true);
+        expect(stateSpy).to.have.been.calledWith(true);
+        stateSpy.reset();
+        this.state.setState('state2', true);
+        expect(stateSpy).to.have.been.calledWith(true, true);
+      });
     });
   });
 
