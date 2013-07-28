@@ -35,9 +35,16 @@
     return !(_.isNull(obj) || _.isUndefined(obj));
   }
 
-  U.dispatch = function(dispatchFn, obj) {
-    function(value) {
-      obj[dispatchFn.call(this, value)](value);
+  U.dispatch = function(dispatchFn, obj, context) {
+    return function(value/*, args*/) {
+      var args = Array.prototype.slice(arguments);
+      var fn = obj[dispatchFn.call(this, value).toString()];
+      if (_.isString(fn)) {
+        if (!exists(context[fn]))
+          throw new Error(fn + " is not defined");
+        fn = context[fn];
+      }
+      return fn.apply(context, args);
     }
   }
 
@@ -85,7 +92,15 @@
         responder.func.apply(responder.context, args);
       });
     }
-  }
+  };
+
+  U.watchState = function(states, statefulObj, fn) {
+    if (!_.isArray(states))
+      states = [states];
+    _.each(states, function(state) {
+      U.listenTo("state:" + state, statfulObj, fn);
+    });
+  };
 
   U.State = _.extend({
     setInitialState: function (stateObj) {
@@ -117,11 +132,11 @@
       return this._state[state];
     },
 
-    setState: function(state, value) {
+    setState: function(state, value, trigger) {
       if (!U.exists(value))
         throw new Error("State Cannot be undefined or null");
       this._state[state] = U.deepClone(value);
-      this.trigger("state:" + state, this._state[state]);
+      this.trigger("state:" + state, this._state[state], state);
     },
 
     unsetState: function(state) {
@@ -364,24 +379,26 @@
    * defined as "event-type sizzle-selector", and values are either functions
    * or a string of an object method name; */
 
+  U.Tool.prototype.delegateDomEvent = function(type, fn, selector) {
+    if (_.isString(fn)) {
+      if (U.exists(this[fn]))
+        fn = _.bind(this[fn], this);
+      else
+        throw new Error(fn + " is not defined.");
+    }
+
+    selector = selector.split(' ');
+    var event = selector[0];
+    selector = _.rest(selector).join(' ');
+
+    if (type === "d3") 
+      this.d3el.selectAll(selector).on(event, fn);
+    else if (type === "$")
+      this.$el.on(event, selector, fn);
+  };
+
   U.Tool.prototype.delegateDomEvents = function(type) {
-    _.each(this.domEvents, function(fn, selector) {
-      if (_.isString(fn)) {
-        if (U.exists(this[fn]))
-          fn = _.bind(this[fn], this);
-        else
-          throw new Error(fn + " is not defined.");
-      }
-
-      selector = selector.split(' ');
-      var event = selector[0];
-      selector = _.rest(selector).join(' ');
-
-      if (type === "d3") 
-        this.d3el.selectAll(selector).on(event, fn);
-      else if (type === "$")
-        this.$el.on(event, selector, fn);
-    }, this);
+    _.each(this.domEvents, _.partial(this.delegateDomEvent, type), this);
   };
 
   U.Tool.prototype.prepareData = function(data, filters, fields) {
