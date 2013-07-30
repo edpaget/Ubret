@@ -5,49 +5,72 @@
 // Requires Jquery
 
 (function() {
-  var root = root;
+  var root = this;
   var U = root.U;
 
   U.PersistState = function(options, state) {
-    var sync = U.sync(options.url, options.ajax, optiosn.idState, state);
-    U.watchState(options.watchState || [], state, sync);
+    _.defaults(options, {
+      idField: 'id',
+      ajax: {},
+      watchState: [],
+      toJSON: function(state) {
+        return state;
+      },
+      fromJSON: function(response) {
+        return response;
+      }
+    });
+    var sync = U.sync(options.watchState, 
+                      options.url, 
+                      options.ajax, 
+                      options.idField, 
+                      options.toJSON, 
+                      options.fromJSON)(state)
+    U.watchState(options.watchState, state, sync);
     sync();
   };
 
-  U.sync = function(url, state, ajax, id) {
-    var model = {};
+  U.sync = function(persistedState, url, ajax, idField, toJSON, fromJSON) {
+    return function(state) {
+      var model = {};
 
-    function(value, key) {
-      var request;
-      var id = state.getState(id);
-      if (U.exists(id)) {
-        request = $.ajax(_.extend(ajax, {type: 'GET', url: url, dataType: 'json'}))
-      } else if (U.exists(id) && U.exists(value) && U.exists(key)) {
-        if (model[key] == value)
-          return;
-        model[key] = value;
-        var data = {}[key] = value;
-        request = $.ajax(_.extend(ajax, {
-          type: 'PATCH', 
-          url: url, 
-          dataType: 'json',
-          data: data
-        }));
-     } else { 
-        var data = this.getState();
-        request = $.ajax(_.extend(ajax, {
-          type: 'POST',
-          url: url,
-          dataType: 'json',
-          data: data,
-        }));
-     }
+      return function(value, key) {
+        var request;
+        var id = state.getState(idField);
+        var data = state.getState(persistedState);
 
-     request.then(function(response) {
-       model = response;
-       _.chain(response).pairs().each(function(args) {
-         state.setState.apply(state, args);
+        if (U.exists(id)) {
+          console.log('here');
+          request = $.ajax(_.extend(ajax, {type: 'GET', url: url + id, dataType: 'json'}))
+        } else if (U.exists(id) && U.exists(value) && U.exists(key)) {
+          if (model[key] == value)
+            return;
+          model[key] = value;
+          request = $.ajax(_.extend(ajax, {
+            type: 'PUT', 
+            url: url, 
+            dataType: 'json',
+            data: toJSON(data)
+          }));
+       } else { 
+          var data = state.getState();
+          model = data;
+          request = $.ajax(_.extend(ajax, {
+            type: 'POST',
+            url: url,
+            dataType: 'json',
+            data: toJSON(data)
+          }));
+       }
+
+       return request.then(fromJSON).then(function(response) {
+         model = response;
+         _.chain(response).pairs().each(function(args) {
+          if (_.contains(persistedState, args[0]))
+            state.setState.apply(state, args);
+         });
        });
-     });
+      }
+    }
   };
 }).call(this);

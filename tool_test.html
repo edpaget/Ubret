@@ -6,29 +6,35 @@
   <script src="test/vendor/underscore.js"></script>
   <script src="test/vendor/underscore.array.builders.js"></script>
   <script src="test/vendor/d3.js"></script>
+  <script src="test/vendor/jquery.js"></script>
   <script src="libubret.js"></script>
   <script src="libubret-paginated.js"></script>
   <script src="libubret-table.js"></script>
+  <script src="libubret-datasource.js"></script>
+  <script src="libubret-persistence.js"></script>
+  <script src="libubret-datasource-spelunker.js"></script>
 </head>
 <body>
+  <div id="spelunker"></div>
   <div id="test"></div>
   <script>
-    var dataSource = 
+    var dataSource = new U.Spelunker({id: 'Spelunker-1'})
     var table = new U.Table({
       id: 'Table-1',
-      state: {height: 200, width: 600},
-      data: [{a: 1, b: 3, c: 4, d: 1, image: 'blah', uid: 1},
-             {a: 2, b: 11, c: 5, d: 11, image: 'blah', uid: 2},
-             {a: 9, b: 7, c: 4, d: 31, image: 'blah', uid: 3},
-             {a: 1, b: 6, c: 8, d: 234, image: 'blah', uid: 4},
-             {a: 8, b: 90, c: 0, d: 2342, image: 'blah', uid: 5},
-             {a: 7, b: 84, c: 14, d: 721, image: 'blah', uid: 6},
-             {a: 4, b: 23, c: 40, d: 31, image: 'blah', uid: 7}]
+      state: {height: 200, width: 600}
+   //   data: [{a: 1, b: 3, c: 4, d: 1, image: 'blah', uid: 1},
+    //         {a: 2, b: 11, c: 5, d: 11, image: 'blah', uid: 2},
+     //        {a: 9, b: 7, c: 4, d: 31, image: 'blah', uid: 3},
+      //       {a: 1, b: 6, c: 8, d: 234, image: 'blah', uid: 4},
+       //      {a: 8, b: 90, c: 0, d: 2342, image: 'blah', uid: 5},
+        //     {a: 7, b: 84, c: 14, d: 721, image: 'blah', uid: 6},
+         //    {a: 4, b: 23, c: 40, d: 31, image: 'blah', uid: 7}]
     });
+    table.parentTool(dataSource);
+    spelunker = document.getElementById('test');
     test = document.getElementById('test');
+    spelunker.appendChild(dataSource.el);
     test.appendChild(table.el);
-    U.next(table);
-    U.next(table);
   </script>
 </body>
 </html>

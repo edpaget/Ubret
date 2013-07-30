@@ -8,6 +8,7 @@
 
   var root = this;
   var U = root.U;
+  var $ = root.$;
 
   /* Data Sources should list parameters as an object this.params. 
    * Each key in the object should be the name of the state to assign 
@@ -39,12 +40,13 @@
 
     url: function() {
       return '';
-    };
+    },
 
     fetch: function (/* args */) {
-      var url = _.isFunction(this.url) ? this.url.apply(this, arguments), : this.url;
+      var url = _.isFunction(this.url) ? this.url.apply(this, arguments) : 
+        this.url;
       $.ajax(_.extend(this.ajaxOpts, { 
-        type: 'GET'
+        type: 'GET',
         url: url,
         dataType: 'json' 
       })).then(function(data) { _.map(data, this.parse) })
@@ -52,17 +54,17 @@
     },
 
     validateAndFetch: function(/* args */) {
-      if _.isEmpty(this.validate())
+      if (_.isEmpty(this.validate()))
         this.fetcher.apply(this, arguments);
       else
         this.invalid.apply(this, arguments);
     },
 
-    this.parse: function(datum) {
+    parse: function(datum) {
       return datum; 
     },
 
-    this.dataReady: function(data) {
+    dataReady: function(data) {
       this.setData(data);
     },
 
@@ -82,10 +84,21 @@
     },
 
     renderParam: function(param, key, id) {
-      this.$el.appendTo(param.render(param)).effects()
+      if (param.hidden)
+        return;
+      if (!U.exists(param.render))
+        throw new Error('No Render Fn Specified for Param');
+
+      var label = $(document.createElement('label'))
+        .text(param.label);
+
+      $(param.render(param))
         .data('key', key)
-        .attr('id', id);
-        .attr(param.attribtues);
+        .attr('id', id)
+        .attr(param.attributes)
+        .appendTo(label);
+
+      label.appendTo(this.$el);
     },
 
     select: function(param, key, id) {
@@ -101,7 +114,8 @@
           return html.appendChild(option);
         }, document.createElement('select'));
       };
-      param.access = this.elemValueToState('select#' id + " option:selected", key);
+      var selector = 'select#' + id + " option:selected"
+      param.access = this.elemValueToState(selector, key);
       return [param, key, id];
     },
 
@@ -110,23 +124,23 @@
         return [document.createElement('textarea'), 
                 document.createElement('button')];
       };
-      param.access = this.elemValueToState('textarea#' id, key);
+      param.access = this.elemValueToState('textarea#' + id, key);
       return [param, key, id];
     },
 
     range: function(param, key, id) {
-      _.extend(param.attribtues, {
-        type: 'text',
+      _.extend(param.attributes, {
+        type: 'range',
         min: param.validation[0],
         max: param.validation[1],
-        value: this.getState('value');
+        value: this.getState('value')
       });
 
       param.render = function(param) {
-        var range = document.createElement(input)
+        var range = document.createElement('input')
         return range;
       }
-      param.access = this.elemValueToState('input#' id, key);
+      param.access = this.elemValueToState('input#' + id, key);
       return [param, key, id];
     },
 
@@ -141,7 +155,7 @@
         return box
       };
 
-      param.access = this.elemValueToState('input#' id, key);
+      param.access = this.elemValueToState('input#' + id, key);
       return [param, key, id ];
     },
 
@@ -154,25 +168,34 @@
     render: function () {
       var dispatch = U.dispatch(function(p) { return p.input }, {
         Select : 'select',
-        TextArea: 'textArea'
+        TextArea: 'textArea',
         TextBox: 'textBox',
         Range: 'range',
-        'undefined' : function(param) { return [param, key, id]; }
+        default: function(param, key, id) { return [param, key, id]; }
       }, this);
 
-      _.chain(this.params).map(function(p, key) { return dispatch(p, key, _.uniqueId('param_')); })
-        .each(function(param) { this.renderParam.apply(this, param); });
+      _.chain(this.params).pairs().map(function(param) {
+        return [param[0], _.defaults(param[1], {attributes: {}})];
+      }).map(function(param) { 
+        return dispatch(param[1], param[0], _.uniqueId('param_')); 
+      }).each(function(param) { 
+        this.renderParam.apply(this, param); 
+      }, this);
 
       var fetchButton = document.createElement('button')
       fetchButton.className = 'fetch';
+      fetchButton.textContent = 'Fetch';
       this.$el.append(fetchButton);
 
       this.delegateDomEvent('$', function() { 
-        _.reduce(_.pluck(this.params, 'access'), function(access) {
-          access.call(this);
-        }, this);
+        _.chain(this.params).pluck('access').compact()
+          .each(function(access) {
+            access.call(this);
+          }, this);
       }, 'click button.fetch');
     }
   });
+
+  U.DataSource.extend = _.partial(U.extend, U.DataSource);
 
 }).call(this);

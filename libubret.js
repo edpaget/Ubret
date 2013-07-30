@@ -37,10 +37,11 @@
 
   U.dispatch = function(dispatchFn, obj, context) {
     return function(value/*, args*/) {
-      var args = Array.prototype.slice(arguments);
-      var fn = obj[dispatchFn.call(this, value).toString()];
+      var args = Array.prototype.slice.call(arguments);
+      var dispatchValue = dispatchFn.call(this, value) || 'default';
+      var fn = obj[dispatchValue];
       if (_.isString(fn)) {
-        if (!exists(context[fn]))
+        if (!U.exists(context[fn]))
           throw new Error(fn + " is not defined");
         fn = context[fn];
       }
@@ -98,7 +99,7 @@
     if (!_.isArray(states))
       states = [states];
     _.each(states, function(state) {
-      U.listenTo("state:" + state, statfulObj, fn);
+      U.listenTo("state:" + state, statefulObj, fn);
     });
   };
 
@@ -126,10 +127,14 @@
       }, this);
     },
 
-    getState: function(state) {
-      if (!U.exists(state))
+    getState: function(/* state */) {
+      var args = Array.prototype.slice.call(arguments);
+      if (args.length === 0)
         return U.deepClone(this._state);
-      return this._state[state];
+      else if (args.length === 1)
+        return this._state[args[0]];
+      else
+        return _.pick.apply(null, [this._state].concat(args));
     },
 
     setState: function(state, value, trigger) {
@@ -324,7 +329,8 @@
     if (U.exists(this.initialize))
       this.initialize();
 
-    this.setData(opts.data || []);
+    if (U.exists(opts.data))
+      this.setData(opts.data);
     this.setSelection(opts.selection || []);
   };
 
@@ -392,9 +398,9 @@
     selector = _.rest(selector).join(' ');
 
     if (type === "d3") 
-      this.d3el.selectAll(selector).on(event, fn);
+      this.d3el.selectAll(selector).on(event, _.bind(fn, this));
     else if (type === "$")
-      this.$el.on(event, selector, fn);
+      this.$el.on(event, selector, _.bind(fn, this));
   };
 
   U.Tool.prototype.delegateDomEvents = function(type) {
@@ -421,7 +427,11 @@
   };
 
   U.Tool.prototype.childData = function() {
-    return this.getState('prepared-data').toArray() || [];
+    var data = this.getState('prepared-data')
+    if (U.exists(data))
+      return data.toArray();
+    else
+      return [];
   };
 
   U.Tool.prototype.setData = function(data) {
