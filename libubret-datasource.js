@@ -45,6 +45,7 @@
     fetch: function (/* args */) {
       var url = _.isFunction(this.url) ? this.url.apply(this, arguments) : 
         this.url;
+      console.log(url);
       $.ajax(_.extend(this.ajaxOpts, { 
         type: 'GET',
         url: url,
@@ -54,6 +55,7 @@
     },
 
     validateAndFetch: function(/* args */) {
+      console.log('here');
       if (_.isEmpty(this.validate()))
         this.fetcher.apply(this, arguments);
       else
@@ -115,7 +117,7 @@
         }, document.createElement('select'));
       };
       var selector = 'select#' + id + " option:selected"
-      param.access = this.elemValueToState(selector, key);
+      param.access = this.elemValue(selector, key);
       return [param, key, id];
     },
 
@@ -124,7 +126,7 @@
         return [document.createElement('textarea'), 
                 document.createElement('button')];
       };
-      param.access = this.elemValueToState('textarea#' + id, key);
+      param.access = this.elemValue('textarea#' + id, key);
       return [param, key, id];
     },
 
@@ -140,7 +142,7 @@
         var range = document.createElement('input')
         return range;
       }
-      param.access = this.elemValueToState('input#' + id, key);
+      param.access = this.elemValue('input#' + id, key);
       return [param, key, id];
     },
 
@@ -155,13 +157,13 @@
         return box
       };
 
-      param.access = this.elemValueToState('input#' + id, key);
+      param.access = this.elemValue('input#' + id, key);
       return [param, key, id ];
     },
 
-    elemValueToState: function(selector, key) {
+    elemValue: function(selector, key) {
       return function() {
-        this.setState(key, this.$el.find(selector).val());
+        return [key, this.$el.find(selector).val()];
       }
     },
 
@@ -189,8 +191,10 @@
 
       this.delegateDomEvent('$', function() { 
         _.chain(this.params).pluck('access').compact()
-          .each(function(access) {
-            access.call(this);
+          .map(function(access) {
+            return access.call(this);
+          }, this).each(function(pair) {
+            this.setState(pair[0], pair[1]);
           }, this);
       }, 'click button.fetch');
     }

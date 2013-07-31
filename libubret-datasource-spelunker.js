@@ -15,20 +15,33 @@
     },
 
     persistenceOpts: {
-      withState: ['search_type', 'ra', 'dec', 'limit', 'radius', 'queryId'],
+      requiredState: ['search_type', 'ra', 'dec', 'radius', 'limit'],
+      optionalState: ['queryId'],
       ajax: {
         crossDomain: true
       },
       idField: 'queryId',
       url: "http://localhost:8080/sky_server/",
       fromJSON: function(response) {
-        return response.params;
+        return {
+          ra: response.params.ra,
+          dec: response.params.dec,
+          limit: response.params.limit,
+          radius: response.params.radius,
+          queryId: response._id,
+          search_type: response['search-type']
+        };
       },
-      toJSON: function(state) {
-       return {
-          _id: state.queryId,
-          search_type: state.search_type,
-          params: _.omit(state, 'search_type', 'queryId')
+      toJSON: function(data) {
+        return {
+          _id: data.queryId,
+          search_type: data.search_type,
+          params: {
+            ra: data.ra,
+            dec: data.dec,
+            limit: data.limit,
+            radius: data.radius
+          }
         };
       }
     },
@@ -59,7 +72,7 @@
         }
       },
       radius: {
-        label: 'Radius ',
+        label: 'Radius',
         input: 'TextBox',
         required: true,
         validation: function(radius) {
@@ -77,6 +90,7 @@
     },
 
     url: function() {
+      console.log(this.getState('queryId'));
       return "http://localhost:8080/sky_server/" + this.getState('queryId');
     }
   });

@@ -31,8 +31,9 @@
     return tmp;
   }
 
-  U.exists = function(obj) {
-    return !(_.isNull(obj) || _.isUndefined(obj));
+  U.exists = function(/* obj */) {
+    var args = Array.prototype.slice.call(arguments);
+    return _.every(args, function(obj) {return !(_.isNull(obj) || _.isUndefined(obj));});
   }
 
   U.dispatch = function(dispatchFn, obj, context) {
@@ -95,12 +96,8 @@
     }
   };
 
-  U.watchState = function(states, statefulObj, fn) {
-    if (!_.isArray(states))
-      states = [states];
-    _.each(states, function(state) {
-      U.listenTo("state:" + state, statefulObj, fn);
-    });
+  U.watchState = function(reqStates, statefulObj, fn, optStates) {
+    statefulObj.whenState(reqStates, fn, optStates);
   };
 
   U.State = _.extend({
@@ -111,18 +108,17 @@
     whenState: function(states, cb, optionalState) {
       if (!U.exists(optionalState))
         optionalState = [];
-      var stateCheck = function() {
+      var allStates = states.concat(optionalState);
+      var stateCheck = function(x, key) {
         var check = _.every(states, function(state) {
           return U.exists(this._state[state]);
         }, this);
         if (check) {
-          cb.apply(this, _.values(
-            _.pick.apply(null, [this._state]
-                         .concat(states).concat(optionalState))));
+          cb.apply(this, _.values(this.getState.apply(this, allStates)).concat(key));
         }
       };
 
-      _.each(states.concat(optionalState), function(state) {
+      _.each(allStates, function(state) {
         this.on("state:" + state, stateCheck, this);
       }, this);
     },
@@ -138,10 +134,13 @@
     },
 
     setState: function(state, value, trigger) {
+      if (!U.exists(trigger))
+        trigger = true;
       if (!U.exists(value))
         throw new Error("State Cannot be undefined or null");
       this._state[state] = U.deepClone(value);
-      this.trigger("state:" + state, this._state[state], state);
+      if (trigger) 
+        this.trigger("state:" + state, this._state[state], state);
     },
 
     unsetState: function(state) {
