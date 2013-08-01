@@ -31,10 +31,15 @@
 
   U.DataSource = U.Tool.extend({
     initialize: function() {
-      var required = _.filter(this.params, function(p) { return p.required; });
-      var optional = _.filter(this.params, function(p) { return !p.required; });
+      var paramName = function(p) { return p[0]; };
+      var paramPairs = _.chain(this.params).pairs()
+      var required = paramPairs.filter(function(p) { return p[1].required; })
+        .map(paramName).value();
 
-      this.whenState(required, this.ValidateAndFetch, optional);
+      var optional = paramPairs.filter(function(p) { return !p.required; })
+        .map(paramName).value();
+
+      this.whenState(required, this.validateAndFetch, optional);
       this.render();
     },
 
@@ -55,11 +60,12 @@
     },
 
     validateAndFetch: function(/* args */) {
-      console.log('here');
-      if (_.isEmpty(this.validate()))
-        this.fetcher.apply(this, arguments);
+      var validation = this.validate()
+      console.log(validation);
+      if (_.isEmpty(validation))
+        this.fetch.apply(this, arguments);
       else
-        this.invalid.apply(this, arguments);
+        this.invalid.call(this, validation);
     },
 
     parse: function(datum) {
@@ -73,12 +79,14 @@
     validate: function () {
       return _.chain(this.params).reduce(function(m, p, key) {
         var valid;
-        if (_.isFunction(p.validation)) {
+        if (!U.exists(p.validation)) {
+          valid = true;
+        } else if (_.isFunction(p.validation)) {
           valid = p.validation(this.getState(key));
         } else if (p.validation.length === 2) {
           var value = this.getState(key);
           valid = (p.validation[0] < value) && (p.validation[1] > value);
-        } else {
+        } else if (_.isObject(p.validation)) {
           valid = U.exists(p.validation[value]);
         }
       return valid ? m : m.concat([key, (p.message || "Param: " + key + " must be valid.")]);
