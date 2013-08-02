@@ -67,7 +67,7 @@
       if (_.isUndefined(this._listeners[event]))
         this._listeners[event] = [responder]
       else
-        this._listeners[event] = this._listeners[event].concat([responder])
+        this._listeners[event] = this._listeners[event].concat(responder);
       },
 
     off: function(/* args */) {
@@ -434,6 +434,8 @@
   };
 
   U.Tool.prototype.setData = function(data) {
+    if (_.isEmpty(data))
+      return;
     this.setState('data', new U.Data(data));
   };
 

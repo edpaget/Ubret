@@ -14,6 +14,10 @@
       U.PersistState(this.persistenceOpts, this); 
     },
 
+    ajaxOpts: {
+      crossDomain: true
+    },
+
     persistenceOpts: {
       requiredState: ['search_type', 'ra', 'dec', 'radius', 'limit'],
       optionalState: ['queryId'],
@@ -85,12 +89,20 @@
       }
     },
 
+    preParse: function(response) {
+      if (response.status === 'ready') {
+        return U.Spelunker.__super__.preParse.call(this, response);
+      } else {
+        setTimeout(_.bind(this.fetch, this), 5000);
+        return [];
+      }
+    },
+
     parse: function(response) {
-      return response.data;
+      return response.subjects;
     },
 
     url: function() {
-      console.log(this.getState('queryId'));
       return "http://localhost:8080/sky_server/" + this.getState('queryId');
     }
   });

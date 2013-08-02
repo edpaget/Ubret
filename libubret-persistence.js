@@ -42,7 +42,6 @@
         if (U.exists(key) && (model[key] === data[key])) {
           return;
         } else if (key === idField) {
-          console.log(url + id);
           request = $.ajax(_.defaults(ajax, {
             type: 'GET', 
             url: url + id, 

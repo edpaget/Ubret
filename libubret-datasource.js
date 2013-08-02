@@ -32,11 +32,11 @@
   U.DataSource = U.Tool.extend({
     initialize: function() {
       var paramName = function(p) { return p[0]; };
-      var paramPairs = _.chain(this.params).pairs()
+      var paramPairs = _.chain(this.params).pairs();
       var required = paramPairs.filter(function(p) { return p[1].required; })
         .map(paramName).value();
 
-      var optional = paramPairs.filter(function(p) { return !p.required; })
+      var optional = paramPairs.filter(function(p) { return !p[1].required; })
         .map(paramName).value();
 
       this.whenState(required, this.validateAndFetch, optional);
@@ -50,18 +50,22 @@
     fetch: function (/* args */) {
       var url = _.isFunction(this.url) ? this.url.apply(this, arguments) : 
         this.url;
-      console.log(url);
       $.ajax(_.extend(this.ajaxOpts, { 
         type: 'GET',
         url: url,
         dataType: 'json' 
-      })).then(function(data) { _.map(data, this.parse) })
-        .then(this.dataReady);
+      })).then(_.bind(this.preParse, this)).then(_.bind(this.dataReady, this));
+    },
+
+    preParse: function (response) {
+      if (_.isArray(response))
+        return _.map(data, this.parse);
+      else
+        return this.parse(response);
     },
 
     validateAndFetch: function(/* args */) {
-      var validation = this.validate()
-      console.log(validation);
+      var validation = this.validate();
       if (_.isEmpty(validation))
         this.fetch.apply(this, arguments);
       else
@@ -85,7 +89,7 @@
           valid = p.validation(this.getState(key));
         } else if (p.validation.length === 2) {
           var value = this.getState(key);
-          valid = (p.validation[0] < value) && (p.validation[1] > value);
+          valid = (p.validation[0] <= value) && (p.validation[1] >= value);
         } else if (_.isObject(p.validation)) {
           valid = U.exists(p.validation[value]);
         }
@@ -114,7 +118,7 @@
     select: function(param, key, id) {
       param.render = function(param) { 
         return _.reduce(params.validation, function(html, value, key) {
-          var option = document.createElement('option')
+          var option = document.createElement('option');
           option.setAttribute('value', key);
           option.textContent(value);
 
@@ -124,7 +128,7 @@
           return html.appendChild(option);
         }, document.createElement('select'));
       };
-      var selector = 'select#' + id + " option:selected"
+      var selector = 'select#' + id + " option:selected";
       param.access = this.elemValue(selector, key);
       return [param, key, id];
     },
@@ -147,9 +151,9 @@
       });
 
       param.render = function(param) {
-        var range = document.createElement('input')
+        var range = document.createElement('input');
         return range;
-      }
+      };
       param.access = this.elemValue('input#' + id, key);
       return [param, key, id];
     },
@@ -162,7 +166,7 @@
 
       param.render = function(param) {
         var box = document.createElement('input');
-        return box
+        return box;
       };
 
       param.access = this.elemValue('input#' + id, key);
@@ -172,11 +176,11 @@
     elemValue: function(selector, key) {
       return function() {
         return [key, this.$el.find(selector).val()];
-      }
+      };
     },
 
     render: function () {
-      var dispatch = U.dispatch(function(p) { return p.input }, {
+      var dispatch = U.dispatch(function(p) { return p.input; }, {
         Select : 'select',
         TextArea: 'textArea',
         TextBox: 'textBox',
@@ -192,7 +196,7 @@
         this.renderParam.apply(this, param); 
       }, this);
 
-      var fetchButton = document.createElement('button')
+      var fetchButton = document.createElement('button');
       fetchButton.className = 'fetch';
       fetchButton.textContent = 'Fetch';
       this.$el.append(fetchButton);
