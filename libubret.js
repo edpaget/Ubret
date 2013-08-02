@@ -121,6 +121,8 @@
       _.each(allStates, function(state) {
         this.on("state:" + state, stateCheck, this);
       }, this);
+
+      stateCheck.call(this, null, states[0]);
     },
 
     getState: function(/* state */) {
@@ -301,6 +303,7 @@
     this.el = document.createElement('div');
     this.el.id = this.id;
     this.el.className = this.name || '';
+    opts.dom = this.dom || opts.dom;
 
     if (opts.dom === "$") 
       this.$el = $(this.el);
@@ -308,13 +311,6 @@
       this.d3el = d3.select(this.el)
     if (U.exists(this.$el) && U.exists(this.domEvents))
       this.delegateDomEvents('$');
-
-    // Initialize State Responders
-    this.whenState(['data', 'filters', 'fields'], this.prepareData);
-    this.whenState(['prepared-data'], this.updateChildData);
-
-    if (U.exists(this.stateResponders)) 
-      this.initializeStateResponders();
 
     // Setup State
     var state = opts.state || {}
@@ -325,12 +321,19 @@
 
     this.setInitialState(state);
 
-    if (U.exists(this.initialize))
-      this.initialize();
-
     if (U.exists(opts.data))
       this.setData(opts.data);
     this.setSelection(opts.selection || []);
+
+    // Initialize State Responders
+    this.whenState(['data', 'filters', 'fields'], this.prepareData);
+    this.whenState(['prepared-data'], this.updateChildData);
+
+    if (U.exists(this.stateResponders)) 
+      this.initializeStateResponders();
+
+    if (U.exists(this.initialize))
+      this.initialize();
   };
 
   _.extend(U.Tool.prototype, U.State);
