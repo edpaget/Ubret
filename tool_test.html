@@ -18,9 +18,10 @@
   <div id="spelunker"></div>
   <div id="test"></div>
   <script>
-    var dataSource = new U.Spelunker({id: 'Spelunker-1'})
+    var dataSource = new U.Spelunker({id: 'Spelunker-1', dom: '$'})
     var table = new U.Table({
       id: 'Table-1',
+      dom: 'd3', 
       state: {height: 200, width: 600}
    //   data: [{a: 1, b: 3, c: 4, d: 1, image: 'blah', uid: 1},
     //         {a: 2, b: 11, c: 5, d: 11, image: 'blah', uid: 2},

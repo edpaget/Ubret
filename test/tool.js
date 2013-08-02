@@ -27,6 +27,7 @@
       this.tool = new this.SinonTool({
         id: 'id', 
         state: null, 
+        dom: 'd3',
         data: [{a: 1, c: 2, b: 3, uid: 1},
                {a: 3, c: 19, b: 20, uid: 2},
                {a: 9, c: 17, b: 50, uid: 3}],

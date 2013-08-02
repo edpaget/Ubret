@@ -44,7 +44,7 @@
 
     drawPage: function(data, page, selection) {
       var keys = data.keys();
-      var pages = data.toArray();
+      var pages = data.project(keys).toArray();
 
       if (page >= pages.length)
         page = page % pages.length;

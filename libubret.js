@@ -213,7 +213,7 @@
 
   U.Data.prototype.keys = function() {
     return _.chain(this._data).map(function(i) { 
-          return _.chain(i).omit('uid').keys().value() 
+          return _.chain(i).omit('uid', '_id', 'image').keys().value() 
       }).flatten().uniq().value();
   }
 
@@ -302,9 +302,9 @@
     this.el.id = this.id;
     this.el.className = this.name || '';
 
-    if (U.exists($)) 
+    if (opts.dom === "$") 
       this.$el = $(this.el);
-    if (U.exists(d3))
+    if (opts.dom === "d3")
       this.d3el = d3.select(this.el)
     if (U.exists(this.$el) && U.exists(this.domEvents))
       this.delegateDomEvents('$');

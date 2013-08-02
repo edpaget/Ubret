@@ -93,7 +93,7 @@
       if (response.status === 'ready') {
         return U.Spelunker.__super__.preParse.call(this, response);
       } else {
-        setTimeout(_.bind(this.fetch, this), 5000);
+        setTimeout(_.bind(this.fetch, this), 500);
         return [];
       }
     },
