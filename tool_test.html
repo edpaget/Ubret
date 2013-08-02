@@ -18,7 +18,10 @@
   <div id="spelunker"></div>
   <div id="test"></div>
   <script>
-    var dataSource = new U.Spelunker({id: 'Spelunker-1', dom: '$'})
+    var dataSource = new U.Spelunker({
+      id: 'Spelunker-1', 
+      state: {queryId: "51fbdbab4472b46bc3be724a"},
+      dom: '$'})
     var table = new U.Table({
       id: 'Table-1',
       dom: 'd3', 

@@ -27,6 +27,7 @@
                       options.toJSON, 
                       options.fromJSON)(state);
     U.watchState(options.requiredState, state, sync, options.optionalState);
+    sync(options.idField);
   };
 
   U.sync = function(persistedState, url, ajax, idField, toJSON, fromJSON) {
@@ -41,7 +42,8 @@
         
         if (U.exists(key) && (model[key] === data[key])) {
           return;
-        } else if (key === idField) {
+        } else if (key === idField && U.exists(id)) {
+          model[key] = id;
           request = $.ajax(_.defaults(ajax, {
             type: 'GET', 
             url: url + id, 
