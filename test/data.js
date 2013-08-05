@@ -31,6 +31,7 @@
       it('should return filtered results', function() {
         var filtered = this.data
           .filter(function(d) { return d.a === 2;});
+        console.log(filtered);
         expect(filtered.toArray()).to.have.length(1);
         expect(filtered.toArray())
           .to.have.deep.property('[0].a').and.equal(2);

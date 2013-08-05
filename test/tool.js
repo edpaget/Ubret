@@ -68,7 +68,7 @@
     describe('initializeStateResponders', function() {
       it('should set responder when responder is a function reference', function() {
         this.tool.test.reset();
-        this.tool.setState('state', true);
+        this.tool.state.set('state', true);
         expect(this.tool.testState).to.have.been.called;
         expect(this.tool.render).to.have.been.called;
         expect(this.tool.test).to.not.have.been.called;
@@ -79,16 +79,15 @@
     describe('setData', function() {
       it('should set the data state', function() {
         var spy = sinon.spy();
-        this.tool.on('state:data', spy);
-        this.tool.unsetState('data');
+        this.tool.state.on('state:data', spy);
         this.tool.setData([{a: 1, b: 2, c: 3}]);
         expect(spy).to.have.been.called;
-        expect(this.tool.getState('data')).to.be.ok;
+        expect(this.tool.state.get('data')).to.be.ok;
       });
 
       it('should trigger the data event', function() {
         var spy = sinon.spy();
-        U.listenTo(this.tool, 'data', spy);
+        U.listenTo(this.tool.state, 'data', spy);
         this.tool.setData([{a: 1, b: 2, c: 3}]);
         expect(spy).to.have.been.called;
       });
@@ -97,16 +96,15 @@
     describe('setSelection', function() {
       it('should set the selection state', function() {
         var spy = sinon.spy();
-        this.tool.on('state:selection', spy);
-        this.tool.unsetState('selection');
+        this.tool.state.on('state:selection', spy);
         this.tool.setSelection([1, 2, 3]);
         expect(spy).to.have.been.called;
-        expect(this.tool.getState('selection')).to.have.length(3);
+        expect(this.tool.state.get('selection')).to.have.length(3);
       });
 
       it('should trigger the selection event', function() {
         var spy = sinon.spy();
-        U.listenTo(this.tool, 'selection', spy);
+        U.listenTo(this.tool.state, 'selection', spy);
         this.tool.setSelection([1, 2, 3]);
         expect(spy).to.have.been.called;
       });
@@ -118,22 +116,22 @@
       });
 
       it('should copy the childData and selection from the parent', function() {
-        expect(this.childTool.getState('data')).to.be.ok;
-        expect(this.childTool.getState('selection')).to.have.length(1);
-        expect(this.childTool.getState('selection')[0]).to.equal(1);
+        expect(this.childTool.state.get('data')).to.be.ok;
+        expect(this.childTool.state.get('selection')).to.have.length(1);
+        expect(this.childTool.state.get('selection')[0]).to.equal(1);
       });
 
       it('should set event listeners on data events', function() {
         this.tool.setData([{a: 1, b: 2, c: 3, uid: 1}]);
-        expect(this.childTool.getState('data').toArray()).to.have.length(1);
-        expect(this.childTool.getState('data').toArray())
+        expect(this.childTool.state.get('data').toArray()).to.have.length(1);
+        expect(this.childTool.state.get('data').toArray())
           .to.have.deep.property('[0].a').and.equal(1);
       });
 
       it('should set event listeners on selection events', function() {
         this.tool.setSelection([2]);
-        expect(this.childTool.getState('selection')[0]).to.equal(2);
-        expect(this.childTool.getState('selection')).to.have.length(1);
+        expect(this.childTool.state.get('selection')[0]).to.equal(2);
+        expect(this.childTool.state.get('selection')).to.have.length(1);
       });
 
     });

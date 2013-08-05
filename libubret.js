@@ -42,27 +42,27 @@
 
   U.dispatch = function(dispatchFn, obj, ctx) {
     var dispatchObj = _.map(obj, function(fns, regex) {
-      fns = U.fnsFromContext(fns, ctx);
+      fns = U.fnsFromContext(ctx, fns);
       return [new RegExp(regex), fns];
     });
     return function(value/*, args*/) {
-      var args = Array.prototype.slice.call(arguments);
+      var args = Array.prototype.slice.call(arguments, 1);
       var dispatchValue = dispatchFn.call(this, value) || 'default';
       _.chain(dispatchObj).filter(function(pair) {
-        return !_.isEmpty(pair[0].match(dispatchValue));
+        return !_.isEmpty(dispatchValue.match(pair[0]));
       }).each(function(pair) {
-        _.each(pair[1], function(fn) { fn.apply(ctx, args); });
+        _.each(pair[1], function(fn) { fn.apply(ctx, args.concat(value)); });
       });
     };
   };
 
   U.pipeline = function(ctx/*, fns */) {
     var fns = Array.prototype.slice.call(arguments, 1);
+		fns = U.fnsFromContext(ctx, fns);
 
     return function(seed/*, args */) {
       var args = Array.prototype.slice.call(arguments, 1);
-      _.reduce(fns, function(r, fn) { 
-        fn = U.fnFromContext(fn, ctx);
+      return _.reduce(fns, function(r, fn) { 
         return fn.apply(ctx, [r].concat(args));
       }, seed);
     }
@@ -78,9 +78,15 @@
 
   U.createEventEmitter = function(listeners, ctx) {
     return Object.create(U.EventEmitter, {
-      ctx: ctx,
-      listeners: listeners, 
-      _listeners: U.dispatch(U.identity, listeners, ctx)
+      ctx: { value: ctx },
+      listeners: { 
+				value: listeners || {},
+				writable: true
+			},
+      _listeners: { 
+				value: U.dispatch(U.identity, listeners, ctx),
+				writable: true
+		 	}
     });
   };
 
@@ -93,14 +99,14 @@
   };
 
   U.fnsFromContext = function(ctx, fns) {
-    if (_.isArray(fns))
-      return fns;
-    else if (_.isFunction(fns))
-      return [fns];
-    else if (_.isString(fns)) {
+    if (_.isArray(fns)) {
+      return _.map(fns, _.partial(U.fnFromContext, ctx));
+		} else if (_.isString(fns)) {
       fns = fns.split(' ');
       return _.map(fns, _.partial(U.fnFromContext, ctx));
-    }
+    } else {
+			return [fns];
+		}
   };
 
   U.EventEmitter = {
@@ -117,14 +123,16 @@
     },
 
     off: function(event, fn, ctx) {
-      if (!U.exists(fn))
+			if (!U.exists(event))
+				this.listeners = {};
+			else if (!U.exists(fn))
         this.listeners[event] = [];
       else {
         if (U.exists(ctx))
           fn = _.bind(fn, ctx);
         this.listeners[event] = _.without(this.listeners[event], fn);
       }
-      this._listeners = U.dispatch(U.identity, this.listeners, thix.ctx);
+      this._listeners = U.dispatch(U.identity, this.listeners, this.ctx);
       return this;
     },
 
@@ -135,62 +143,120 @@
     }
   };
 
-  U.watchState = function(reqStates, statefulObj, fn, optStates) {
-    statefulObj.whenState(reqStates, fn, optStates);
+	U.createState = function(state, ctx) {
+		return Object.create(_.extend({}, U.State, U.EventEmitter), {
+			state: { 
+				value: state || {},
+				writable: true
+			},
+      ctx: { value: ctx },
+      listeners: { 
+				value: {},
+				writable: true
+			},
+      _listeners: { 
+				value: U.dispatch(U.identity, {}, ctx),
+				writable: true
+		 	}
+    });
+	};
+
+  U.watchState = function(statefulObj, state, fns, ctx) {
+		fns = U.fnsFromContext(ctx, fns);
+
+		if (_.isArray(state)) {
+			var reqState = state;
+			var optState = [];
+		} else {
+			var reqState = state.required;
+			var optState = state.optional;
+		}
+		var allStates = reqState.concat(optState);
+
+		var stateCheck = function(x, key) {
+			var check = _.every(reqState, function(state) {
+				return U.exists(statefulObj.get(state));
+			});
+
+			if (check) {
+				if (allStates.length === 1)
+					var state = [ U.State.get.apply(statefulObj, allStates) ];
+				else
+					var state = U.State.get.apply(statefulObj, allStates);
+				_.each(fns, function(fn) {
+					fn.apply(ctx, state.concat(key));
+				});
+			}
+		};
+
+		_.each(allStates, function(state) {
+			U.listenTo(statefulObj, "state:" + state, stateCheck);
+		});
   };
 
-  U.State = _.extend({
-    setInitialState: function (stateObj) {
-      this._state = U.deepClone(stateObj);
-    },
-
-    whenState: function(states, cb, optionalState) {
-      if (!U.exists(optionalState))
-        optionalState = [];
-      var allStates = states.concat(optionalState);
-      var stateCheck = function(x, key) {
-        var check = _.every(states, function(state) {
-          return U.exists(this._state[state]);
-        }, this);
-        if (check) {
-          cb.apply(this, _.values(this.getState.apply(this, allStates)).concat(key));
-        }
-      };
-
-      _.each(allStates, function(state) {
-        this.on("state:" + state, stateCheck, this);
-      }, this);
-
-      stateCheck.call(this, null, states[0]);
-    },
-
-    getState: function(/* state */) {
+  U.State = {
+    get: function(/* state */) {
       var args = Array.prototype.slice.call(arguments);
       if (args.length === 0)
-        return U.deepClone(this._state);
-      else if (args.length === 1)
-        return this._state[args[0]];
-      else
-        return _.pick.apply(null, [this._state].concat(args));
+        return this.state;
+			var states = _.chain(args)
+				.map(this.parseState, this)
+				.map(function(pair) {
+					if (pair[0] === '*')
+						return U.deepClone(pair[1]);
+					else
+						return U.deepClone(pair[1][pair[0]]); })
+				.value();
+			if (args.length === 1)
+				return states[0];
+			return states
     },
 
-    setState: function(state, value, trigger) {
-      if (!U.exists(trigger))
-        trigger = true;
+		parseState: function(state) {
+			var toAccessor = function(accessor) {
+				var arrayMatch = accessor.match(/\[[0-9]+\]/);
+				if (!_.isNull(arrayMatch))
+					return parseInt(arrayMatch[0]);
+				else
+					return accessor;
+			};
+			var state = state.split('.');
+			var finalAccessor = toAccessor(state.pop());
+			var stateObj = _.reduce(state, function(m, accessor) {
+				return m[toAccessor(accessor)];
+			}, this.state);
+			return [finalAccessor, stateObj];
+		},
+
+    set: function(state, value) {
+			if (_.isObject(state)) {
+				_.each(state, function(value, state) {
+					this.set(state, value);
+				}, this);
+			}	
+
       if (!U.exists(value))
         throw new Error("State Cannot be undefined or null");
-      this._state[state] = U.deepClone(value);
-      if (trigger) 
-        this.trigger("state:" + state, this._state[state], state);
+
+			var finalState = this.parseState(state);
+			if (!_.isEqual(finalState[1][finalState[0]], value)) {
+				finalState[1][finalState[0]] = value;
+				this.triggerStates(state);
+			}
     },
 
-    unsetState: function(state) {
-      if (U.exists(this._state[state])) {
-        this._state[state] = null;
-        this.trigger("unset:" + state);
-      }
-    }
-  }, U.EventEmitter);
+		triggerStates: function(state) {
+			var states = state.split('.')
+			_.reduce(states, function(m, state, index) {
+				if (index === 0)
+					var event = state;
+				else
+					var event = m + "." + state;
+				this.trigger("state:" + event, this.get(event));
+				return event;
+			}, "", this);
+		}
+  };
 
   U.Field = {name: 'name', fn: function() {}}
 
@@ -202,13 +268,22 @@
     this._sortOrder = 'a';
     this._projection = ["*"];
     this._perPage = 0;
-  }
+		this._keys = _.chain(this._data).map(function(i) { 
+      return _.chain(i).omit('uid', '_id', 'image').keys().value() 
+    }).flatten().uniq().value();
+  };
 
   U.Data.prototype.filter = function(fn) {
     var data = U.deepClone(this);
     data._filters.push(fn);
     return data;
-  }
+  };
+
+	U.Data.prototype.filters = function(fns) {
+    var data = U.deepClone(this);
+		data._filters = data._filters.concat(fns);
+		return data;
+	};
 
   U.Data.prototype.removeFilter = function(fn) {
     var data = U.deepClone(this)
@@ -216,13 +291,22 @@
     return data;
   };
 
+	U.Data.prototype.addFields = function(fields) {
+		if (!_.every(fields, _.partial(U.isA, U.Field)))
+			throw new Error('All Fields must have a name and a function');
+    var data = U.deepClone(this);
+		data._fields = data._filters.concat(fields);
+		data._keys = _.uniq(data._keys.concat(_.pluck(fields, 'name')));
+		return data;
+	};
+
   U.Data.prototype.addField = function(field) {
-    if (U.isA(field, U.Field)) {
-      var data = U.deepClone(this);
-      data._fields.push(field);
-      return data;
-    } else
+    if (!U.isA(field, U.Field)) 
       throw new Error("Field must have a name and a function");
+    var data = U.deepClone(this);
+    data._fields.push(field);
+		data._keys = _.uniq(data._keys.concat(field.name));
+    return data;
   };
 
   U.Data.prototype.removeField = function(field) {
@@ -250,50 +334,95 @@
     var data = U.deepClone(this);
     data._perPage = perPage;
     return data;
-  }
+  };
 
   U.Data.prototype.keys = function() {
-    return _.chain(this._data).map(function(i) { 
-          return _.chain(i).omit('uid', '_id', 'image').keys().value() 
-      }).flatten().uniq().value();
-  }
+    return this._keys;
+	};
 
-  U.Data.prototype.toArray = function() {
-    // Apply Filters First
-    var filtered = _.reduce(this._filters, function(target, filter) {
-        return _.filter(target, filter, this);
-      }, this._data, this);
+	U.Data.prototype.data = function() {
+		return this._data;
+	};
 
-    // Apply added fields
-    var withFields = _.reduce(this._fields, function(target, field) {
-        return _.map(target, function(item) {
-          item[field.name] = field.fn(item); return item; 
-        }, this);
-      }, filtered, this); 
+	U.Data.prototype._applyFilters = function(data) {
+		return _.reduce(this._filters, function(data, filter) {
+			return _.filter(data, function(d) { return filter(d) });
+		}, data)
+	};
 
-    // Sort Data
-    var sorted = _.sortBy(withFields, function(d) { 
-      return d[this._sortProp] }, this);
-    if (this._sortOrder === 'd')
-      sorted = sorted.reverse();
+	U.Data.prototype._applySort = function(data) {
+		var sorted = _.sortBy(data, function(d) { return d[this._sortProp] }, this);
+		if (this._sortOrder === 'd')
+			return sorted.reverse();
+		else
+			return sorted;
+	};
 
-    if (this._projection[0] === "*")
-      var projection = sorted;
-    else
-      var projection = _.map(sorted, function(item) { 
-        var args = [item].concat(this._projection);
-        return _.pick.apply(this, args);
-      }, this);
-    
-    if (this._perPage === 0) 
-      return projection;
-    else
-      return _.partitionAll(projection, this._perPage);
-  }
+	U.Data.prototype._applyPaginate = function(data, take) {
+		if (this._perPage === 0)
+			return data;
+		return _.reduce(data, function(m, d, index) {
+			if (m.length === take)
+				return m;
+			if ((index % this._perPage) === 0)
+				m.push([d]);
+			else
+				m[m.length - 1].push(d);
+			return m;
+		}, [], this);
+	};
 
-  U.Data.prototype.each = function(fn) {
-    _.each(this.toArray(), fn, this);
-  }
+	U.Data.prototype._take = function(data, take) {
+		if (this._perPage > 0)
+			return data;
+		else
+			return data.slice(0, take);
+	};
+
+	U.Data.prototype._applyFields = function(data) { 
+		var applyField = function(field, d) {
+			d[field.name] = field.fn(d);
+			return d;
+		};
+
+		return _.reduce(this._fields, function(data, field) {
+			return _.map(data, function(datum) {
+				if (_.isArray(datum))
+					return _.map(datum, _.partial(applyField, field));
+				else
+					return applyField(field, datum)
+			});
+		}, data);
+	};
+
+	U.Data.prototype._applyProjection = function(data) {
+		var applyProjection = function(projection, data) {
+			return _.map(data, function(d) {
+				return _.pick.apply(null, [d].concat(projection));
+			});
+		};
+
+		if (this._projection[0] === "*")
+			return data;
+		else if (this._perPage > 0)
+			return _.map(data, _.partial(applyProjection, this._projection));
+		else
+			return applyProjection(this._projection, data);
+	};
+
+  U.Data.prototype.toArray = function(take) {
+		return U.pipeline(this,  
+			'_applyFilters',
+			'_applySort',
+			'_applyPaginate',
+			'_take',
+			'_applyFields',
+			'_applyProjection')(this._data, take);
+  };
+
+  U.Data.prototype.each = function(fn, take) {
+    _.each(this.toArray(take), fn, this);
+  };
 
   /* Data.query accepts a 'query object' with following fields:
    * select: Array of attributes to include. Blank or ["*"] for all
@@ -302,28 +431,21 @@
    * sort: Object with {prop: 'property to sort on', order: 'a' or 'd' for ascending or descending sort
    * perPage: Number of items per page */
 
-  U.Data.prototype.query = function(query) {
+  U.Data.prototype.query = function(q) {
+		_.defaults(q, {
+			perPage: 0,
+			sort: {prop: 'uid', order: 'a'},
+			withFields: [],
+			where: [],
+			select: '*'
+		});
+
     var data = U.deepClone(this);
-    if (U.exists(query.select)) 
-      data = data.project.apply(data, query.select);
-    else
-      data = data.project.call(data, '*');
-
-    if (U.exists(query.where))
-      data._filters = data._filters.concat(query.where);
-
-    if (U.exists(query.withFields) && 
-        _.every(query.withFields, function(field) { 
-          return U.isA(field, U.Field); }))
-      data._fields = data._fields.concat(query.withFields);
-
-    if (U.exists(query.sort))
-      data = data.sort(query.sort.prop, query.sort.order);
-    
-    if (U.exists(query.perPage))
-      data = data.paginate(query.perPage);
-
-    return data;
+    return data.project(q.select)
+			.sort(q.sort.prop, q.sort.order)
+			.addFields(q.withFields)
+			.filters(q.where)
+			.paginate(q.perPage);
   };
 
   U.query = function(data, query) {
@@ -358,15 +480,15 @@
       _.defaults(state, this.defaults);
     _.defaults(state, {filters: [], fields: []}),
 
-    this.setInitialState(state);
+		this.state = U.createState(state, this);
 
     if (U.exists(opts.data))
       this.setData(opts.data);
     this.setSelection(opts.selection || []);
 
     // Initialize State Responders
-    this.whenState(['data', 'filters', 'fields'], this.prepareData);
-    this.whenState(['prepared-data'], this.updateChildData);
+    U.watchState(this.state, ['data', 'filters', 'fields'], this.prepareData, this);
+    U.watchState(this.state, ['prepared-data'], this.updateChildData, this);
 
     if (U.exists(this.stateResponders)) 
       this.initializeStateResponders();
@@ -374,8 +496,6 @@
     if (U.exists(this.initialize))
       this.initialize();
   };
-
-  _.extend(U.Tool.prototype, U.State);
 
   U.extend = function(parent, obj) {
     var child;
@@ -400,7 +520,7 @@
   /* State Responders are defined as an Array of Responder Objects,
    * which have the following property defined
    *    whenState: String of states 
-   *    respond: A single function or function reference, or an Array 
+   *    responder: A single function or function reference, or an Array 
    *      of functions or function references, or a String of 
    *      names of object methods. */
 
@@ -408,18 +528,8 @@
     _.each(this.stateResponders, this._initStateResponder, this);
   };
 
-  U.Tool.prototype._initStateResponder = function(responder) {
-    var respond = responder.responder;
-    var state = _.partial(this.whenState, responder.whenState.split(' '));
-
-    if (_.isFunction(respond))
-      return state(respond);
-    else if (_.isString(respond))
-      respond = _.map(respond.split(' '), function(method) {
-        if (!_.isFunction(this[method]))
-          throw new Error(method + " is not defined");
-        return this[method];}, this);
-    _.each(respond, state, this);
+  U.Tool.prototype._initStateResponder = function(r) {
+    U.watchState(this.state, r.whenState.split(' '), r.responder, this);
   };
 
   /* this.domEvents is defined as an object where keys are a DOM event 
@@ -449,8 +559,8 @@
   };
 
   U.Tool.prototype.prepareData = function(data, filters, fields) {
-    this.setState('prepared-data', 
-                  data.query({where: filters, withFields: fields}));
+    this.state.set('prepared-data', 
+                  	data.query({where: filters, withFields: fields}));
   };
 
   U.Tool.prototype.parentTool = function(tool) {
@@ -458,17 +568,16 @@
       this.removeParent();
     this._parent = tool;
    
-    this.setInitialState(_.extend(this.getState(), {
-      data: this._parent.childData(),
-      selection: this._parent.getState('selection')
-    }));
+    this.setData(this._parent.childData());
+    this.setSelection(this._parent.state.get('selection'));
 
-    U.listenTo(this._parent, 'data', this.setData, this);
-    U.listenTo(this._parent, 'selection', this.setSelection, this);
+    U.listenTo(this._parent.state, 'data', this.setData, this);
+    U.listenTo(this._parent.state, 'selection', this.setSelection, this);
   };
 
   U.Tool.prototype.childData = function() {
-    var data = this.getState('prepared-data')
+    var data = this.state.get('prepared-data');
+		console.log(this, this.state);
     if (U.exists(data))
       return data.toArray();
     else
@@ -476,18 +585,19 @@
   };
 
   U.Tool.prototype.setData = function(data) {
+		console.log(this, data);
     if (_.isEmpty(data))
       return;
-    this.setState('data', new U.Data(data));
+    this.state.set('data', new U.Data(data));
   };
 
   U.Tool.prototype.setSelection = function(selection) {
-    this.setState('selection', U.deepClone(selection));
-    this.trigger('selection', this.getState('selection'));
+    this.state.set('selection', U.deepClone(selection));
+    this.state.trigger('selection', this.state.get('selection'));
   };
 
   U.Tool.prototype.updateChildData = function() {
-    this.trigger('data', this.childData());
+    this.state.trigger('data', this.childData());
   };
 
 }).call(this)

@@ -18,74 +18,51 @@
         .that.deep.equals({key4: 1, key5: 2});
     });
   });
+
   describe("U.State", function() {
     beforeEach(function() {
-      this.state = _.extend({}, U.State);
-      this.state.setInitialState({});
+      this.state = U.createState();
     });
 
-    describe("setState", function() {
+    describe("set", function() {
       it("should update the state object", function() {
-        this.state.setState('state', true);
-        expect(this.state._state.state).to.be.true;
+        this.state.set('state', true);
+        expect(this.state.state.state).to.be.true;
       })
 
       it("should trigger a state:'state' event ", function() {
         var stateSpy = sinon.spy();
         this.state.on('state:state', stateSpy);
-        this.state.setState('state', true);
+        this.state.set('state', true);
         expect(stateSpy).to.have.been.calledWith(true);
       });
     });
 
-    describe("unsetState", function() {
-      it('should set state object property to null', function () {
-        this.state.setState('state', true);
-        this.state.unsetState('state');
-        expect(this.state._state.state).to.be.null;
-      });
-
-      it('should trigger an unset:"state" event', function () {
-        var stateSpy = sinon.spy();
-        this.state.on('unset:state', stateSpy);
-        this.state.setState('state', true);
-        this.state.unsetState('state');
-        expect(stateSpy).to.have.been.called;
-      });
-
-      it('should not trigger an event if state isnt set', function() {
-        var stateSpy = sinon.spy();
-        this.state.on('unset:state', stateSpy);
-        this.state.unsetState('state');
-        expect(stateSpy).to.not.have.been.called;
-      });
-    });
-
-    describe("whenState", function() {
+    describe("U.watchState", function() {
       it('should call a function when all the required state is set', function() {
         var stateSpy = sinon.spy();
-        this.state.whenState(['state1', 'state2'], stateSpy);
-        this.state.setState('state1', true);
+        U.watchState(this.state, ['state1', 'state2'], stateSpy);
+        this.state.set('state1', true);
         expect(stateSpy).to.not.have.been.called;
-        this.state.setState('state2', true);
+        this.state.set('state2', true);
         expect(stateSpy).to.have.been.called;
       });
 
       it('should pass optional state to the callback function', function() {
         var stateSpy = sinon.spy();
-        this.state.whenState(['state1'], stateSpy, ['state2']);
-        this.state.setState('state2', true);
-        this.state.setState('state1', true);
+        U.watchState(this.state, {required: ['state1'], optional: ['state2']}, stateSpy);
+        this.state.set('state2', true);
+        this.state.set('state1', true);
         expect(stateSpy).to.have.been.calledWith(true, true);
       });
 
       it('should call the callback when optional state is set', function() {
         var stateSpy = sinon.spy();
-        this.state.whenState(['state1'], stateSpy, ['state2']);
-        this.state.setState('state1', true);
+        U.watchState(this.state, {required: ['state1'], optional: ['state2']}, stateSpy);
+        this.state.set('state1', true);
         expect(stateSpy).to.have.been.calledWith(true);
         stateSpy.reset();
-        this.state.setState('state2', true);
+        this.state.set('state2', true);
         expect(stateSpy).to.have.been.calledWith(true, true);
       });
     });
