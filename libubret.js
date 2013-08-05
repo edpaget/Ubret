@@ -36,63 +36,102 @@
     return _.every(args, function(obj) {return !(_.isNull(obj) || _.isUndefined(obj));});
   }
 
-  U.dispatch = function(dispatchFn, obj, context) {
+  U.identity = function(value) {
+    return value;
+  };
+
+  U.dispatch = function(dispatchFn, obj, ctx) {
+    var dispatchObj = _.map(obj, function(fns, regex) {
+      fns = U.fnsFromContext(fns, ctx);
+      return [new RegExp(regex), fns];
+    });
     return function(value/*, args*/) {
       var args = Array.prototype.slice.call(arguments);
       var dispatchValue = dispatchFn.call(this, value) || 'default';
-      var fn = obj[dispatchValue];
-      if (_.isString(fn)) {
-        if (!U.exists(context[fn]))
-          throw new Error(fn + " is not defined");
-        fn = context[fn];
-      }
-      return fn.apply(context, args);
-    }
-  }
-
-  U.listenTo = function(eventEmitter, event, fn, context) {
-    eventEmitter.on(event, fn, context);
+      _.chain(dispatchObj).filter(function(pair) {
+        return !_.isEmpty(pair[0].match(dispatchValue));
+      }).each(function(pair) {
+        _.each(pair[1], function(fn) { fn.apply(ctx, args); });
+      });
+    };
   };
 
-  U.stopListening = function(eventEmitter/*, args */) {
-    var args = Array.prototype.slice.call(arguments, 1);
-    eventEmitter.off.apply(eventEmitter, args);
-  }
+  U.pipeline = function(ctx/*, fns */) {
+    var fns = Array.prototype.slice.call(arguments, 1);
+
+    return function(seed/*, args */) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      _.reduce(fns, function(r, fn) { 
+        fn = U.fnFromContext(fn, ctx);
+        return fn.apply(ctx, [r].concat(args));
+      }, seed);
+    }
+  };
+
+  U.listenTo = function(eventEmitter, event, fn, ctx) {
+    return eventEmitter.on(event, fn, ctx);
+  };
+
+  U.stopListening = function(eventEmitter, event, fn, ctx) {
+    return eventEmitter.off(event, fn, ctx);
+  };
+
+  U.createEventEmitter = function(listeners, ctx) {
+    return Object.create(U.EventEmitter, {
+      ctx: ctx,
+      listeners: listeners, 
+      _listeners: U.dispatch(U.identity, listeners, ctx)
+    });
+  };
+
+  U.fnFromContext = function(ctx, fn) {
+    if (_.isString(fn))
+      fn = ctx[fn]
+    if (_.isUndefined(fn))
+      throw new Error('Function must be defined');
+    return fn;
+  };
+
+  U.fnsFromContext = function(ctx, fns) {
+    if (_.isArray(fns))
+      return fns;
+    else if (_.isFunction(fns))
+      return [fns];
+    else if (_.isString(fns)) {
+      fns = fns.split(' ');
+      return _.map(fns, _.partial(U.fnFromContext, ctx));
+    }
+  };
 
   U.EventEmitter = {
-    on: function(event, cb, context) {
-      if (!U.exists(this._listeners))
-        this._listeners = {};
-      var responder = {func: cb, context: context};
-      if (_.isUndefined(this._listeners[event]))
-        this._listeners[event] = [responder]
+    on: function(event, fns, ctx) {
+      fns = U.fnsFromContext(ctx, fns);
+      if (this.ctx !== ctx)
+        fns = _.map(fns, function(fn) { return _.bind(fn, ctx); });
+      if (U.exists(this.listeners[event]))
+        this.listeners[event] = this.listeners[event].concat(fns);
       else
-        this._listeners[event] = this._listeners[event].concat(responder);
-      },
-
-    off: function(/* args */) {
-      if (!U.exists(this._listeners))
-        return;
-      var event = arguments[0],
-        func = arguments[1],
-        context = arguments[2];
-      if (_.isUndefined(event))
-        return this._listeners = null;
-      else if (_.isUndefined(func))
-        return this._listeners[event] = null;
-      var responder = {func: func, context: context};
-      this._listeners[event] = _.without(this._listeners[event], responder);
+        this.listeners[event] = fns;
+      this._listeners = U.dispatch(U.identity, this.listeners, this.ctx);
+      return this;
     },
 
-    trigger: function(event/*, args */) {
-      if (!U.exists(this._listeners))
-        return;
-      var args = Array.prototype.slice.call(arguments, 1);
-      if (_.isNull(this._listeners))
-        return;
-      _.each(this._listeners[event], function(responder) {
-        responder.func.apply(responder.context, args);
-      });
+    off: function(event, fn, ctx) {
+      if (!U.exists(fn))
+        this.listeners[event] = [];
+      else {
+        if (U.exists(ctx))
+          fn = _.bind(fn, ctx);
+        this.listeners[event] = _.without(this.listeners[event], fn);
+      }
+      this._listeners = U.dispatch(U.identity, this.listeners, thix.ctx);
+      return this;
+    },
+
+    trigger: function(/*, args */) {
+      var args = Array.prototype.slice.call(arguments);
+      this._listeners.apply(null, args);
+      return this;
     }
   };
 

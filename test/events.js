@@ -1,7 +1,7 @@
 (function() {
   describe("U.EventEmitter", function() {
     beforeEach(function() {
-      this.eventEmitter = _.extend({}, U.EventEmitter);
+      this.eventEmitter = U.createEventEmitter({});
     });
     it("should exist", function() {
       expect(this.eventEmitter).to.be.ok;
