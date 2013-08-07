@@ -46,6 +46,7 @@
       return [new RegExp(regex), fns];
     });
     return function(value/*, args*/) {
+      console.log(arguments, dispatchObj);
       var args = Array.prototype.slice.call(arguments, 1);
       var dispatchValue = dispatchFn.call(this, value) || 'default';
       _.chain(dispatchObj).filter(function(pair) {
@@ -229,7 +230,9 @@
 		},
 
     set: function(state, value) {
+      this.changed = [state];
 			if (_.isObject(state)) {
+        this.chang
 				_.each(state, function(value, state) {
 					this.set(state, value);
 				}, this);
@@ -241,26 +244,14 @@
 			var finalState = this.parseState(state);
 			if (!_.isEqual(finalState[1][finalState[0]], value)) {
 				finalState[1][finalState[0]] = value;
-				this.triggerStates(state);
+        this.trigger("state:" + state, value);
 			}
-    },
-
-		triggerStates: function(state) {
-			var states = state.split('.')
-			_.reduce(states, function(m, state, index) {
-				if (index === 0)
-					var event = state;
-				else
-					var event = m + "." + state;
-				this.trigger("state:" + event, this.get(event));
-				return event;
-			}, "", this);
-		}
+    }
   };
 
   U.Field = {name: 'name', fn: function() {}}
 
-  U.Data = function(data) {
+  U.Data = function(data, omittedKeys) {
     this._data = data;
     this._filters = [];
     this._fields = [];
@@ -269,7 +260,7 @@
     this._projection = ["*"];
     this._perPage = 0;
 		this._keys = _.chain(this._data).map(function(i) { 
-      return _.chain(i).omit('uid', '_id', 'image').keys().value() 
+      return _.keys(_.omit.apply(null, [i].concat(omittedKeys)));
     }).flatten().uniq().value();
   };
 
@@ -452,152 +443,155 @@
     return data.query(query).toArray();
   };
 
-  /* Tool accepts an opts object to configure new tools
-   * id: the id of the tool's element (optional)
-   * data: data in the form of an array of objects (optional)
-   * selection: array of selected uids of objects (optional)
-   * state: an object of the initial state of the object (optional) */
+  var root = this;
+  var U = root.U;
 
-  U.Tool = function(opts) {
-    // Create tool element
-    this.id = opts.id || _.uniqueId('tool_');
-    this.el = document.createElement('div');
-    this.el.id = this.id;
-    this.el.className = this.name || '';
-    opts.dom = this.dom || opts.dom;
-
-    if (opts.dom === "$") 
-      this.$el = $(this.el);
-    if (opts.dom === "d3")
-      this.d3el = d3.select(this.el)
-    if (U.exists(this.$el) && U.exists(this.domEvents))
-      this.delegateDomEvents('$');
-
-    // Setup State
-    var state = opts.state || {}
-
-    if (U.exists(this.defaults))
-      _.defaults(state, this.defaults);
-    _.defaults(state, {filters: [], fields: []}),
-
-		this.state = U.createState(state, this);
-
-    if (U.exists(opts.data))
-      this.setData(opts.data);
-    this.setSelection(opts.selection || []);
-
-    // Initialize State Responders
-    U.watchState(this.state, ['data', 'filters', 'fields'], this.prepareData, this);
-    U.watchState(this.state, ['prepared-data'], this.updateChildData, this);
-
-    if (U.exists(this.stateResponders)) 
-      this.initializeStateResponders();
-
-    if (U.exists(this.initialize))
-      this.initialize();
-  };
-
-  U.extend = function(parent, obj) {
-    var child;
-
-    if (_.has(obj, 'constructor'))
-      child = obj.constructor;
-    else
-      child = function() {parent.apply(this, arguments);};
-
-    var Surrogate = function(){ this.constructor = child; };
-    Surrogate.prototype = parent.prototype;
-    child.prototype = new Surrogate;
-    
-    _.extend(child.prototype, obj);
-
-    child.__super__ = parent.prototype;
-    return child;
-  };
-
-  U.Tool.extend = _.partial(U.extend, U.Tool);
-
-  /* State Responders are defined as an Array of Responder Objects,
-   * which have the following property defined
-   *    whenState: String of states 
-   *    responder: A single function or function reference, or an Array 
-   *      of functions or function references, or a String of 
-   *      names of object methods. */
-
-  U.Tool.prototype.initializeStateResponders = function() {
-    _.each(this.stateResponders, this._initStateResponder, this);
-  };
-
-  U.Tool.prototype._initStateResponder = function(r) {
-    U.watchState(this.state, r.whenState.split(' '), r.responder, this);
-  };
-
-  /* this.domEvents is defined as an object where keys are a DOM event 
-   * defined as "event-type sizzle-selector", and values are either functions
-   * or a string of an object method name; */
-
-  U.Tool.prototype.delegateDomEvent = function(type, fn, selector) {
-    if (_.isString(fn)) {
-      if (U.exists(this[fn]))
-        fn = _.bind(this[fn], this);
-      else
-        throw new Error(fn + " is not defined.");
+  U.DomBinding = function(options, state, el) {
+    if (!U.exists(el)) {
+      options.el = el; 
     }
 
-    selector = selector.split(' ');
-    var event = selector[0];
-    selector = _.rest(selector).join(' ');
+    options.state = state;
+    var removeDom = this.removeDom;
+    var watchDom = this.watchDom;
+    var attachDom = this.attachDom;
+    var render = _.wrap(options.render, function(fn) {
+      removeDom();
+      attachDom(fn());
+      watchDom();
+    });
 
-    if (type === "d3") 
-      this.d3el.selectAll(selector).on(event, _.bind(fn, this));
-    else if (type === "$")
-      this.$el.on(event, selector, _.bind(fn, this));
+    U.watchState(state, 
+                 options.watchState, 
+                 render,
+                 options);
   };
 
-  U.Tool.prototype.delegateDomEvents = function(type) {
-    _.each(this.domEvents, _.partial(this.delegateDomEvent, type), this);
+  U._parseSelector = function(eventAttacher) {
+    return function(fns, event) {
+
+      selector = event.split(' ');
+      event = _.first(selector);
+      selector = _.rest(selector).join(' ');
+
+      fns = U.fnsFromContext(options, fns);
+      _.each(fns, _.partial(eventAttacher, event, selector));
+    };
   };
 
-  U.Tool.prototype.prepareData = function(data, filters, fields) {
-    this.state.set('prepared-data', 
-                  	data.query({where: filters, withFields: fields}));
+  U.$DomBinding = function(options, state, el) {
+    options.$el = U.exists(el) ? $(el) : $(options.el);
+
+    eventBinder = function(event, selector, fn) {
+      options.$el.on(event, selector, fn);
+    };
+
+    dom = {
+      watchDom: function() {
+        _.each(options.events, U._parseSelector(eventBinder));
+      },
+      removeWatch: function() {
+        options.$el.off();
+      },
+      attachDom: function(htmlLike) {
+        options.$el.html(htmlLike);
+      }
+    };
+    U.DomBinding.call(dom, options, state, el);
   };
 
-  U.Tool.prototype.parentTool = function(tool) {
-    if (U.exists(this._parent))
-      this.removeParent();
-    this._parent = tool;
-   
-    this.setData(this._parent.childData());
-    this.setSelection(this._parent.state.get('selection'));
+  U.d3DomBinding = function(options, state, el) {
+    options.d3el = d3(el);
+    eventBinder = function(event, selector, fn) {
+      if (U.exists(selector))
+        options.d3el.selectAll(selector).on(event, fn);
+      else
+        options.d3el.on(event, fn);
+    };
 
-    U.listenTo(this._parent.state, 'data', this.setData, this);
-    U.listenTo(this._parent.state, 'selection', this.setSelection, this);
+    dom = {
+      watchDom: function() {
+        _.each(options.events, U._parseSelector(eventBinder));
+      },
+      removeWatch: function() {
+        options.d3el.off();
+      },
+      attachDom: U.identity
+    };
+
+    U.DomBinding.call(dom, options, state, el);
+  }
+
+  U.PersistState = function(options, state) {
+    _.defaults(options, {
+      idField: 'id',
+      ajax: {},
+      watchState: [],
+      toJSON: function(state) {
+        return state;
+      },
+      fromJSON: function(response) {
+        return response;
+      }
+    });
+    var sync = U.sync(options.requiredState.concat(options.optionalState),
+                      options.url, 
+                      options.ajax, 
+                      options.idField, 
+                      options.toJSON, 
+                      options.fromJSON)(state);
+    U.watchState(options.requiredState, state, sync, options.optionalState);
+    sync(options.idField);
   };
 
-  U.Tool.prototype.childData = function() {
-    var data = this.state.get('prepared-data');
-		console.log(this, this.state);
-    if (U.exists(data))
-      return data.toArray();
-    else
-      return [];
-  };
+  U.sync = function(persistedState, url, ajax, idField, toJSON, fromJSON) {
+    return function(state) {
+      var model = {};
 
-  U.Tool.prototype.setData = function(data) {
-		console.log(this, data);
-    if (_.isEmpty(data))
-      return;
-    this.state.set('data', new U.Data(data));
-  };
+      return function(/* args */) {
+        var request;
+        var key = _.last(Array.prototype.slice.call(arguments));
+        var id = state.getState(idField);
+        var data = state.getState.apply(state, persistedState);
+        
+        if (U.exists(key) && (model[key] === data[key])) {
+          return;
+        } else if (key === idField && U.exists(id)) {
+          model[key] = id;
+          request = $.ajax(_.defaults(ajax, {
+            type: 'GET', 
+            url: url + id, 
+            dataType: 'json'}));
+        } else if (U.exists(id, key)) {
+          model[key] = data[key];
+          request = $.ajax(_.defaults(ajax, {
+            type: 'PUT', 
+            url: url, 
+            dataType: 'json',
+            contentType: 'application/json',
+            data: JSON.stringify(toJSON(data))}));
+        } else { 
+          model = data;
+          request = $.ajax(_.defaults(ajax, {
+            type: 'POST',
+            url: url,
+            dataType: 'json',
+            contentType: 'application/json',
+            data: JSON.stringify(toJSON(data))}));
+        }
 
-  U.Tool.prototype.setSelection = function(selection) {
-    this.state.set('selection', U.deepClone(selection));
-    this.state.trigger('selection', this.state.get('selection'));
+        return request.then(fromJSON).then(function(response) {
+          _.chain(response).pairs().each(function(args) {
+            if (_.contains(persistedState, args[0])) {
+              if (model[args[0]] === args[1]) {
+                state.setState.apply(state, args.concat(false));
+              } else {
+                model[args[0]] = args[1];
+                state.setState.apply(state, args);
+              }
+           }
+         })});
+      }
+    }
   };
-
-  U.Tool.prototype.updateChildData = function() {
-    this.state.trigger('data', this.childData());
-  };
-
-}).call(this)
+}).call(this);
