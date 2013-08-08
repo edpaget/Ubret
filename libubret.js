@@ -46,7 +46,6 @@
       return [new RegExp(regex), fns];
     });
     return function(value/*, args*/) {
-      console.log(arguments, dispatchObj);
       var args = Array.prototype.slice.call(arguments, 1);
       var dispatchValue = dispatchFn.call(this, value) || 'default';
       _.chain(dispatchObj).filter(function(pair) {
@@ -251,17 +250,18 @@
 
 
   U.DomBinding = function(options, state, el) {
-    if (!U.exists(el)) {
+    if (U.exists(el)) {
       options.el = el; 
     }
 
     options.state = state;
-    var removeDom = this.removeDom;
+    var removeWatch = this.removeWatch;
     var watchDom = this.watchDom;
     var attachDom = this.attachDom;
     var render = _.wrap(options.render, function(fn) {
-      removeDom();
-      attachDom(fn());
+      var args = Array.prototype.slice.call(arguments, 1);
+      removeWatch();
+      attachDom(fn.apply(null, args));
       watchDom();
     });
 
@@ -271,11 +271,11 @@
                  options);
   };
 
-  U._parseSelector = function(eventAttacher) {
+  U._parseSelector = function(options, eventAttacher) {
     return function(fns, event) {
 
-      selector = event.split(' ');
-      event = _.first(selector);
+      var selector = event.split(' ');
+      var event = _.first(selector);
       selector = _.rest(selector).join(' ');
 
       fns = U.fnsFromContext(options, fns);
@@ -286,13 +286,14 @@
   U.$DomBinding = function(options, state, el) {
     options.$el = U.exists(el) ? $(el) : $(options.el);
 
-    eventBinder = function(event, selector, fn) {
+    var eventBinder = function(event, selector, fn) {
+      console.log(options.$el, event, selector, fn);
       options.$el.on(event, selector, fn);
     };
 
-    dom = {
+    var dom = {
       watchDom: function() {
-        _.each(options.events, U._parseSelector(eventBinder));
+        _.each(options.events, U._parseSelector(options, eventBinder));
       },
       removeWatch: function() {
         options.$el.off();
@@ -305,26 +306,26 @@
   };
 
   U.d3DomBinding = function(options, state, el) {
-    options.d3el = d3(el);
-    eventBinder = function(event, selector, fn) {
+    options.d3el = d3.select(el);
+    var eventBinder = function(event, selector, fn) {
       if (U.exists(selector))
         options.d3el.selectAll(selector).on(event, fn);
       else
         options.d3el.on(event, fn);
     };
 
-    dom = {
+    var dom = {
       watchDom: function() {
-        _.each(options.events, U._parseSelector(eventBinder));
+        _.each(options.events, U._parseSelector(options, eventBinder));
       },
       removeWatch: function() {
-        options.d3el.off();
+        options.d3el.on(null);
       },
       attachDom: U.identity
     };
 
     U.DomBinding.call(dom, options, state, el);
-  }
+  };
 
   U.PersistState = function(options, state) {
     _.defaults(options, {
