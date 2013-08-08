@@ -42,8 +42,8 @@
 
   U.dispatch = function(dispatchFn, obj, ctx) {
     var dispatchObj = _.map(obj, function(fns, regex) {
-      fns = U.fnsFromContext(ctx, fns);
-      return [new RegExp(regex), fns];
+      fns = U._fnsFromContext(ctx, fns);
+      return [new RegExp("^" + regex + "$"), fns];
     });
     return function(value/*, args*/) {
       var args = Array.prototype.slice.call(arguments, 1);
@@ -58,7 +58,7 @@
 
   U.pipeline = function(ctx/*, fns */) {
     var fns = Array.prototype.slice.call(arguments, 1);
-		fns = U.fnsFromContext(ctx, fns);
+		fns = U._fnsFromContext(ctx, fns);
 
     return function(seed/*, args */) {
       var args = Array.prototype.slice.call(arguments, 1);
@@ -90,7 +90,7 @@
     });
   };
 
-  U.fnFromContext = function(ctx, fn) {
+  U._fnFromContext = function(ctx, fn) {
     if (_.isString(fn))
       fn = ctx[fn]
     if (_.isUndefined(fn))
@@ -98,12 +98,12 @@
     return fn;
   };
 
-  U.fnsFromContext = function(ctx, fns) {
+  U._fnsFromContext = function(ctx, fns) {
     if (_.isArray(fns)) {
-      return _.map(fns, _.partial(U.fnFromContext, ctx));
+      return _.map(fns, _.partial(U._fnFromContext, ctx));
 		} else if (_.isString(fns)) {
       fns = fns.split(' ');
-      return _.map(fns, _.partial(U.fnFromContext, ctx));
+      return _.map(fns, _.partial(U._fnFromContext, ctx));
     } else {
 			return [fns];
 		}
@@ -111,7 +111,7 @@
 
   U.EventEmitter = {
     on: function(event, fns, ctx) {
-      fns = U.fnsFromContext(ctx, fns);
+      fns = U._fnsFromContext(ctx, fns);
       if (this.ctx !== ctx)
         fns = _.map(fns, function(fn) { return _.bind(fn, ctx); });
       if (U.exists(this.listeners[event]))
@@ -162,7 +162,7 @@
 	};
 
   U.watchState = function(statefulObj, state, fns, ctx) {
-		fns = U.fnsFromContext(ctx, fns);
+		fns = U._fnsFromContext(ctx, fns);
 
 		if (_.isArray(state)) {
 			var reqState = state;
@@ -278,7 +278,7 @@
       var event = _.first(selector);
       selector = _.rest(selector).join(' ');
 
-      fns = U.fnsFromContext(options, fns);
+      fns = U._fnsFromContext(options, fns);
       _.each(fns, _.partial(eventAttacher, event, selector));
     };
   };
@@ -287,7 +287,6 @@
     options.$el = U.exists(el) ? $(el) : $(options.el);
 
     var eventBinder = function(event, selector, fn) {
-      console.log(options.$el, event, selector, fn);
       options.$el.on(event, selector, fn);
     };
 
@@ -327,7 +326,7 @@
     U.DomBinding.call(dom, options, state, el);
   };
 
-  U.PersistState = function(options, state) {
+  U.PersistState = function(options, state, url) {
     _.defaults(options, {
       idField: 'id',
       ajax: {},

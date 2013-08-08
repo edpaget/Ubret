@@ -1,24 +1,4 @@
 (function () {
-  describe("U.deepClone", function() {
-    it('should clone all parts of an object', function() {
-      var testObj = {
-        'key1': 1, 
-        'key2': [1, 2, 4, 5], 
-        'key3': {'key4': 1, 'key5': 2 }
-      }
-      var cloneObj = U.deepClone(testObj);
-      testObj.key1 = 2;
-      testObj.key2 = [1, 2];
-      testObj.key3.key5 = 5;
-      expect(cloneObj).to.have.property('key1')
-        .that.equals(1);
-      expect(cloneObj).to.have.property('key2')
-        .that.deep.equals([1, 2, 4, 5]);
-      expect(cloneObj).to.have.property('key3')
-        .that.deep.equals({key4: 1, key5: 2});
-    });
-  });
-
   describe("U.State", function() {
     beforeEach(function() {
       this.state = U.createState();
