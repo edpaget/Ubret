@@ -158,11 +158,8 @@
 
 		var stateCheck = function(x, key) {
 			key = key.replace('state:', '');
-			var check = _.every(reqState, function(state) {
-				return U.exists(statefulObj.get(state));
-			});
-
-			if (check) {
+			
+			if (_.every(statefulObj.get.apply(statefulObj, reqState), U.exists)) {
 				if (allStates.length === 1)
 					var state = [ statefulObj.get.apply(statefulObj, allStates) ];
 				else
@@ -184,7 +181,7 @@
       if (args.length === 0)
         return this.state;
 			var states = _.chain(args)
-				.map(this._parseState, this)
+				.map(this._parseStateToObj, this)
 				.map(function(pair) {
 					if (pair[0] === '*')
 						return U.deepClone(pair[1]);
@@ -193,38 +190,57 @@
 				.value();
 			if (args.length === 1)
 				return states[0];
-			return states
+			return states;
     },
 
-		_parseState: function(state) {
+		_parseStateToObj: function(state) {
 			var toAccessor = function(accessor) {
-				var arrayMatch = accessor.match(/\[[0-9]+\]/);
+				var arrayMatch = accessor.match(/\[([0-9]+)\]/);
 				if (!_.isNull(arrayMatch))
-					return parseInt(arrayMatch[0]);
+					return parseInt(arrayMatch[1]);
 				else
 					return accessor;
 			};
 			var state = state.split('.');
 			var finalAccessor = toAccessor(state.pop());
-			var stateObj = _.reduce(state, function(m, accessor) {
-				return m[toAccessor(accessor)];
+			var stateObj = _.reduce(state, function(m, accessor, i) {
+				accessor = toAccessor(accessor);
+				if (_.isUndefined(m[accessor])) {
+					var next = (state.length === i + 1) ? 
+						finalAccessor : toAccessor(state[i + 1]);
+					if (_.isNumber(next))
+						return m[accessor] = [];
+					else 
+						return m[accessor] = {};
+				}
+				return m[accessor];
 			}, this.state);
 			return [finalAccessor, stateObj];
 		},
 
+		_parseObjToState: function(prefix, obj) {
+			return _.reduce(obj, function(m, v, k) {
+				k = _.isNumber(k) ? "[" + k + "]" : k;
+				var _prefix = _.isNull(prefix) ? k : prefix + "." + k;
+				if (_.isObject(v) || _.isArray(v))
+					return m.concat(this._parseObjToState(_prefix, v));
+				else
+					return m.concat([[_prefix, v]]);
+			}, [], this);
+		},
+
     set: function(state, value) {
-      this.changed = [state];
-			if (_.isObject(state)) {
-        this.chang
-				_.each(state, function(value, state) {
-					this.set(state, value);
+			if (_.isObject(state) || _.isArray(state)) {
+				_.each(this._parseObjToState(null, state), function(state) {
+					this.set.apply(this, state);
 				}, this);
-			}	
+				return this;
+			}
 
       if (!U.exists(value))
         throw new Error("State Cannot be undefined or null");
 
-			var finalState = this._parseState(state);
+			var finalState = this._parseStateToObj(state);
 			if (!_.isEqual(finalState[1][finalState[0]], value)) {
 				finalState[1][finalState[0]] = value;
         this.trigger("state:" + state, value);
@@ -311,67 +327,67 @@
     U.DomBinding.call(dom, options, state, el);
   };
 
-  U.PersistState = function(options, state, url) {
+  U.PersistState = function(options, url, state) {
     _.defaults(options, {
       idField: 'id',
       ajax: {},
-      watchState: [],
       toJSON: U.identity,
       fromJSON: U.identity
     });
-    var sync = U.sync(options.requiredState.concat(options.optionalState),
-                      options.url, 
-                      options.ajax, 
-                      options.idField, 
-                      options.toJSON, 
-                      options.fromJSON)(state);
-    U.watchState(options.requiredState, state, sync, options.optionalState);
-    sync(options.idField);
+
+    var sync = U.sync(url, options);
+		if (U.exists(state))
+			return sync(state);
+		else
+			return sync;
   };
 
-  U.sync = function(persistedState, url, ajax, idField, toJSON, fromJSON) {
-    return function(state) {
+
+  U.sync = function(url, options) {
+    return function(statefulObj, state) {
       return function(/* args */) {
-        var request;
-        var key = _.last(Array.prototype.slice.call(arguments));
         var id = state.getState(idField);
         var data = state.getState.apply(state, persistedState);
+
+				return {
+					get: function(id) {
+
+					}
+				}
         
         if (key === idField && U.exists(id)) {
-          model[key] = id;
           request = $.ajax(_.defaults(ajax, {
             type: 'GET', 
             url: url + id, 
-            dataType: 'json'}));
+            dataType: 'json'
+					}));
         } else if (U.exists(id, key)) {
-          model[key] = data[key];
           request = $.ajax(_.defaults(ajax, {
             type: 'PUT', 
-            url: url, 
+            url: url + id, 
             dataType: 'json',
             contentType: 'application/json',
-            data: JSON.stringify(toJSON(data))}));
+            data: JSON.stringify(toJSON(data))
+					}));
         } else { 
-          model = data;
           request = $.ajax(_.defaults(ajax, {
             type: 'POST',
             url: url,
             dataType: 'json',
             contentType: 'application/json',
-            data: JSON.stringify(toJSON(data))}));
+            data: JSON.stringify(toJSON(data))
+					}));
         }
 
-        return request.then(fromJSON).then(function(response) {
-          _.chain(response).pairs().each(function(args) {
-            if (_.contains(persistedState, args[0])) {
-              if (model[args[0]] === args[1]) {
-                state.setState.apply(state, args.concat(false));
-              } else {
-                model[args[0]] = args[1];
-                state.setState.apply(state, args);
-              }
-           }
-         })});
+				var resolveReq = function(request) {
+        	return request.then(options.fromJSON).then(function(res) {
+						if (U.exists(options.prefix)) {
+							var obj = {};
+							return obj[prefix] = res;
+						}	
+						return res;
+					}).then(statefulObj.set);
+				};
       }
     }
   };
