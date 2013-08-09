@@ -21,6 +21,11 @@
     return _.difference(_.keys(object), _.keys(_interface)).length === 0;
   };
 
+  U.exists = function(/* obj */) {
+    var args = Array.prototype.slice.call(arguments);
+    return _.every(args, function(obj) {return !(_.isNull(obj) || _.isUndefined(obj));});
+  }
+
   U.deepClone = function(obj) {
     if (_.isFunction(obj) || !U.exists(obj) || !_.isObject(obj))
       return obj;
@@ -29,11 +34,6 @@
       if (obj.hasOwnProperty(key))
         tmp[key] = U.deepClone(value);});
     return tmp;
-  }
-
-  U.exists = function(/* obj */) {
-    var args = Array.prototype.slice.call(arguments);
-    return _.every(args, function(obj) {return !(_.isNull(obj) || _.isUndefined(obj));});
   }
 
   U.identity = function(value) {
@@ -76,19 +76,11 @@
     return eventEmitter.off(event, fn, ctx);
   };
 
-  U.createEventEmitter = function(listeners, ctx) {
-    return Object.create(U.EventEmitter, {
-      ctx: { value: ctx },
-      listeners: { 
-				value: listeners || {},
-				writable: true
-			},
-      _listeners: { 
-				value: U.dispatch(U.identity, listeners, ctx),
-				writable: true
-		 	}
-    });
-  };
+  U.EventEmitter = function(listeners, ctx) {
+		this.listeners = listeners || {};
+		this.ctx = ctx;
+		this._listen();
+	};
 
   U._fnFromContext = function(ctx, fn) {
     if (_.isString(fn))
@@ -109,17 +101,22 @@
 		}
   };
 
-  U.EventEmitter = {
+  U.EventEmitter.prototype = {
+		_listen: function() {
+      this._listeners = U.dispatch(U.identity, this.listeners, this.ctx);
+			return this;
+		},
+
     on: function(event, fns, ctx) {
-      fns = U._fnsFromContext(ctx, fns);
-      if (this.ctx !== ctx)
+			if (U.exists(ctx))
+      	fns = U._fnsFromContext(ctx, fns);
+      if (U.exists(ctx) && (this.ctx !== ctx))
         fns = _.map(fns, function(fn) { return _.bind(fn, ctx); });
       if (U.exists(this.listeners[event]))
         this.listeners[event] = this.listeners[event].concat(fns);
       else
         this.listeners[event] = fns;
-      this._listeners = U.dispatch(U.identity, this.listeners, this.ctx);
-      return this;
+			return this._listen();
     },
 
     off: function(event, fn, ctx) {
@@ -132,8 +129,7 @@
           fn = _.bind(fn, ctx);
         this.listeners[event] = _.without(this.listeners[event], fn);
       }
-      this._listeners = U.dispatch(U.identity, this.listeners, this.ctx);
-      return this;
+			return this._listen();
     },
 
     trigger: function(/*, args */) {
@@ -143,23 +139,10 @@
     }
   };
 
-	U.createState = function(state, ctx) {
-		return Object.create(_.extend({}, U.State, U.EventEmitter), {
-			state: { 
-				value: state || {},
-				writable: true
-			},
-      ctx: { value: ctx },
-      listeners: { 
-				value: {},
-				writable: true
-			},
-      _listeners: { 
-				value: U.dispatch(U.identity, {}, ctx),
-				writable: true
-		 	}
-    });
-	};
+	U.State = function(state, ctx) {
+		this.state = state || {};
+		U.EventEmitter.call(this, {}, ctx);
+	}
 
   U.watchState = function(statefulObj, state, fns, ctx) {
 		fns = U._fnsFromContext(ctx, fns);
@@ -174,15 +157,16 @@
 		var allStates = reqState.concat(optState);
 
 		var stateCheck = function(x, key) {
+			key = key.replace('state:', '');
 			var check = _.every(reqState, function(state) {
 				return U.exists(statefulObj.get(state));
 			});
 
 			if (check) {
 				if (allStates.length === 1)
-					var state = [ U.State.get.apply(statefulObj, allStates) ];
+					var state = [ statefulObj.get.apply(statefulObj, allStates) ];
 				else
-					var state = U.State.get.apply(statefulObj, allStates);
+					var state = statefulObj.get.apply(statefulObj, allStates);
 				_.each(fns, function(fn) {
 					fn.apply(ctx, state.concat(key));
 				});
@@ -194,13 +178,13 @@
 		});
   };
 
-  U.State = {
+  U.State.prototype = {
     get: function(/* state */) {
       var args = Array.prototype.slice.call(arguments);
       if (args.length === 0)
         return this.state;
 			var states = _.chain(args)
-				.map(this.parseState, this)
+				.map(this._parseState, this)
 				.map(function(pair) {
 					if (pair[0] === '*')
 						return U.deepClone(pair[1]);
@@ -212,7 +196,7 @@
 			return states
     },
 
-		parseState: function(state) {
+		_parseState: function(state) {
 			var toAccessor = function(accessor) {
 				var arrayMatch = accessor.match(/\[[0-9]+\]/);
 				if (!_.isNull(arrayMatch))
@@ -240,7 +224,7 @@
       if (!U.exists(value))
         throw new Error("State Cannot be undefined or null");
 
-			var finalState = this.parseState(state);
+			var finalState = this._parseState(state);
 			if (!_.isEqual(finalState[1][finalState[0]], value)) {
 				finalState[1][finalState[0]] = value;
         this.trigger("state:" + state, value);
@@ -248,6 +232,7 @@
     }
   };
 
+	_.extend(U.State.prototype, U.EventEmitter.prototype);
 
   U.DomBinding = function(options, state, el) {
     if (U.exists(el)) {
@@ -331,12 +316,8 @@
       idField: 'id',
       ajax: {},
       watchState: [],
-      toJSON: function(state) {
-        return state;
-      },
-      fromJSON: function(response) {
-        return response;
-      }
+      toJSON: U.identity,
+      fromJSON: U.identity
     });
     var sync = U.sync(options.requiredState.concat(options.optionalState),
                       options.url, 
@@ -350,17 +331,13 @@
 
   U.sync = function(persistedState, url, ajax, idField, toJSON, fromJSON) {
     return function(state) {
-      var model = {};
-
       return function(/* args */) {
         var request;
         var key = _.last(Array.prototype.slice.call(arguments));
         var id = state.getState(idField);
         var data = state.getState.apply(state, persistedState);
         
-        if (U.exists(key) && (model[key] === data[key])) {
-          return;
-        } else if (key === idField && U.exists(id)) {
+        if (key === idField && U.exists(id)) {
           model[key] = id;
           request = $.ajax(_.defaults(ajax, {
             type: 'GET', 

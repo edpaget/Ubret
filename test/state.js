@@ -1,7 +1,7 @@
 (function () {
   describe("U.State", function() {
     beforeEach(function() {
-      this.state = U.createState();
+      this.state = new U.State();
     });
 
     describe("set", function() {

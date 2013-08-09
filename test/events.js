@@ -1,7 +1,7 @@
 (function() {
   describe("U.EventEmitter", function() {
     beforeEach(function() {
-      this.eventEmitter = U.createEventEmitter({});
+      this.eventEmitter = new U.EventEmitter();
     });
 
     it("should exist", function() {
@@ -39,7 +39,7 @@
   describe("U.listenTo", function() {
     it("it should create a listener on the object", function() {
       var cbSpy = sinon.spy()
-      this.eventEmitter = U.createEventEmitter({});
+      this.eventEmitter = new U.EventEmitter();
       U.listenTo(this.eventEmitter, 'event!', cbSpy);
       this.eventEmitter.trigger('event!');
       expect(cbSpy).to.have.been.called;
@@ -49,7 +49,7 @@
   describe("U.stopListening", function() {
     it("it should remove listeners from the object", function() {
       var cbSpy = sinon.spy()
-      this.eventEmitter = U.createEventEmitter({});
+      this.eventEmitter = new U.EventEmitter();
       U.listenTo(this.eventEmitter, 'event!', cbSpy);
       U.stopListening(this.eventEmitter, 'event!');
       this.eventEmitter.trigger('event!');

@@ -1,7 +1,7 @@
 (function () {
   var domBindingInterface = function() {
     beforeEach(function() {
-      this.state = U.createState();
+      this.state = new U.State();
       this.renderSpy = sinon.spy();
       this.clickSpy = sinon.spy();
       this.binding = {
@@ -19,7 +19,7 @@
     it("should bind its render function to state changes", function() {
       this.state.set('state', true);
       expect(this.renderSpy).to.have.been.called;
-      expect(this.renderSpy).to.have.been.calledWith(true, 'state:state');
+      expect(this.renderSpy).to.have.been.calledWith(true, 'state');
     });
 
     it("should set events", function() {
@@ -39,7 +39,7 @@
         attachDom: sinon.spy(),
         watchDom: sinon.spy()
       };
-      this.state = U.createState();
+      this.state = new U.State();
       var options = {
         render: function() {return 'test'},
         watchState: ['state'],
